@@ -127,7 +127,10 @@ jobs:
 
       - name: Read version
         id: version
-        run: echo "version=$(python -c 'import json,pathlib; print(json.loads(pathlib.Path(\"installer/version.json\").read_text())[\"version\"])')" >> $GITHUB_OUTPUT
+        run: |
+          VER=$(jq -r .version installer/version.json)
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "Version = $VER"
 
       - name: Stage Linux package layout
         env:
