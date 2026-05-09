@@ -3,4 +3,4 @@
 Kept in sync with ``installer/version.json`` by ``installer/bump_version.py``.
 """
 
-__version__ = "0.0.2"
+__version__ = "0.0.3"

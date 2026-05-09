@@ -1,12 +1,12 @@
 """海康 MVS 相机驱动。
 
 vendor 了 ``src/psf_scan/vendor/MvImport``（来自 ``/opt/MVS/Samples/64/Python/MvImport``）。
-启动时自动找 MVS Runtime 库目录、登记到 ``os.add_dll_directory`` 并设
-``MVCAM_COMMON_RUNENV``，用户零配置。
+启动时自动找 MVS Runtime 库目录，多重保险登记 DLL 搜索路径，用户零配置。
 """
 
 from __future__ import annotations
 
+import ctypes
 import os
 import sys
 import threading
@@ -35,18 +35,54 @@ _WINDOWS_DLL_DIRS = [
     r"C:\Program Files\Common Files\MVS\Runtime\Win64_x64",
 ]
 
+
+def _diag_log(msg: str) -> None:
+    """Append a diagnostic line to %LOCALAPPDATA%\\PsfScan\\logs\\mvs-loader.log.
+
+    Cheap to call; failure is silent.
+    """
+    try:
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser("~/.psf_scan")
+        log_dir = os.path.join(base, "PsfScan", "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "mvs-loader.log"), "a", encoding="utf-8") as fp:
+            fp.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {msg}\n")
+    except Exception:
+        pass
+
+
 if sys.platform == "win32":
+    _diag_log(f"MVS loader start: PATH heads={os.environ.get('PATH','')[:200]!r}")
+    _matched = None
     for _d in _WINDOWS_DLL_DIRS:
         if not _d:
             continue
-        if os.path.isfile(os.path.join(_d, "MvCameraControl.dll")):
-            # Python 3.8+ 不再读 PATH 解析依赖 DLL，必须显式登记目录。
-            try:
-                os.add_dll_directory(_d)
-            except (AttributeError, OSError):
-                pass
-            os.environ["MVCAM_COMMON_RUNENV"] = _d
-            break
+        dll_path = os.path.join(_d, "MvCameraControl.dll")
+        exists = os.path.isfile(dll_path)
+        _diag_log(f"  candidate {_d!r} exists={exists}")
+        if not exists:
+            continue
+        _matched = _d
+        # 1) Hikvision 自己的环境变量（部分 SDK 路径用得到）
+        os.environ["MVCAM_COMMON_RUNENV"] = _d
+        # 2) Python 3.8+ 安全搜索登记
+        try:
+            os.add_dll_directory(_d)
+            _diag_log(f"  add_dll_directory({_d!r}) OK")
+        except (AttributeError, OSError) as e:
+            _diag_log(f"  add_dll_directory({_d!r}) FAILED: {e!r}")
+        # 3) 进程级 PATH 前置（MvImport 用的 winmode=0 走标准搜索）
+        os.environ["PATH"] = _d + os.pathsep + os.environ.get("PATH", "")
+        # 4) 用绝对路径预加载，把 DLL 与其同目录依赖项一起灌进进程内存。
+        #    LOAD_WITH_ALTERED_SEARCH_PATH = 0x00000008 让依赖项也从 _d 找。
+        try:
+            ctypes.WinDLL(dll_path, winmode=0x00000008)
+            _diag_log(f"  pre-load WinDLL({dll_path!r}) OK")
+        except OSError as e:
+            _diag_log(f"  pre-load WinDLL({dll_path!r}) FAILED: {e!r}")
+        break
+    if _matched is None:
+        _diag_log("  no MVS DLL directory matched; MvImport will likely fail.")
 else:
     for _root in _LINUX_ROOTS:
         if not _root:
