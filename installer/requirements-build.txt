@@ -1,0 +1,5 @@
+# PSF Scan 构建期 pip 依赖。
+# 运行依赖与 pyproject.toml [project].dependencies 保持一致；
+# 真实安装走 `pip install -e .`，本文件只负责构建工具自身。
+
+pyinstaller>=6.5

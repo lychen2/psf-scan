@@ -1,0 +1,7 @@
+{
+  "_comment": "Copy this file to support_contact.json (gitignored) and fill in your real values. Or set the PSF_SCAN_SUPPORT environment variable. Leave anything you don't want to expose as null.",
+  "name": null,
+  "phone": null,
+  "email": null,
+  "url": null
+}

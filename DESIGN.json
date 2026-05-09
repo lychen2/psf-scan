@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-07T20:03:25+08:00",
+  "title": "Design System: PSF Scan",
+  "extensions": {
+    "colorMeta": {
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "#f7f5ef",
+        "tonalRamp": ["#292723", "#49453e", "#69645a", "#898375", "#aaa393", "#ccc4b1", "#e6dec9", "#f7f5ef"]
+      },
+      "panel": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "#ebe8df",
+        "tonalRamp": ["#272521", "#45423b", "#645f56", "#827c70", "#a29b8d", "#c3bcab", "#ded8c7", "#ebe8df"]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "#ddd8cd",
+        "tonalRamp": ["#24221e", "#403d36", "#5c574e", "#787267", "#958e80", "#b5ad9d", "#d0c8b8", "#ddd8cd"]
+      },
+      "signal": {
+        "role": "primary",
+        "displayName": "Signal",
+        "canonical": "#9fc6dc",
+        "tonalRamp": ["#102938", "#1d4056", "#2d5872", "#42718f", "#5f8baa", "#80a8c6", "#a7c9df", "#d5eaf5"]
+      },
+      "sampled": {
+        "role": "secondary",
+        "displayName": "Sampled",
+        "canonical": "#5f8f83",
+        "tonalRamp": ["#10261f", "#1c3c33", "#2a5347", "#3c6b5c", "#538575", "#73a194", "#9bbfb6", "#c9ded9"]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger",
+        "canonical": "#b55345",
+        "tonalRamp": ["#351411", "#552019", "#762d22", "#963c30", "#b75548", "#cf756b", "#e49d96", "#f3cbc8"]
+      },
+      "plot-locator": {
+        "role": "tertiary",
+        "displayName": "Plot Locator",
+        "canonical": "#2f73a3",
+        "tonalRamp": ["#071f31", "#123957", "#20547a", "#2f73a3", "#5591bd", "#82b2d6", "#b4d3e8", "#dcecf5"]
+      },
+      "volume-shell-3": {
+        "role": "tertiary",
+        "displayName": "Volume Shell",
+        "canonical": "#b84642",
+        "tonalRamp": ["#2f1110", "#521b1a", "#742826", "#963633", "#b84642", "#d46a65", "#e89995", "#f5c8c5"]
+      }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "PSF·SCAN corner title only." },
+      "section": { "displayName": "Section", "purpose": "Uppercase section headers paired with a 1px rule." },
+      "body": { "displayName": "Body", "purpose": "Compact labels, checkbox text, and short messages." },
+      "value": { "displayName": "Value", "purpose": "Stable readouts and status values." },
+      "control-value": { "displayName": "Control Value", "purpose": "Spinbox and combobox text." },
+      "meter": { "displayName": "Meter", "purpose": "FPS, peak, frame count, plot metadata." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "locator-fade-step", "value": "55ms", "purpose": "PSF locator fade interval." },
+      { "name": "locator-fade-count", "value": "12 steps", "purpose": "PSF locator opacity fade duration." },
+      { "name": "stage-refresh", "value": "33ms", "purpose": "StageView repaint throttle, about 30 Hz." },
+      { "name": "max-ui-transition", "value": "200ms", "purpose": "Upper bound from PRODUCT.md anti-references." }
+    ],
+    "breakpoints": [
+      { "name": "window-min", "value": "1100px by 720px" },
+      { "name": "top-split", "value": "920px live or PSF view, 320px stage view" },
+      { "name": "vertical-split", "value": "560px main view, 280px control panel" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Primary scan or connection action. Signal fill, rectangular, compact.",
+      "html": "<button class=\"ds-btn-primary\">START SCAN</button>",
+      "css": ".ds-btn-primary { background: #9fc6dc; color: #171a1c; border: 1px solid #9fc6dc; padding: 6px 14px; min-height: 22px; font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: 1px; border-radius: 0; cursor: pointer; } .ds-btn-primary:hover { background: #b8d7e8; border-color: #b8d7e8; } .ds-btn-primary:active { background: #7aa9c5; border-color: #7aa9c5; } .ds-btn-primary:disabled { background: #ddd8cd; color: #6f7470; border-color: #b8b1a3; cursor: not-allowed; }"
+    },
+    {
+      "name": "Default Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Secondary instrument command. No fill until hover.",
+      "html": "<button class=\"ds-btn\">move stage</button>",
+      "css": ".ds-btn { background: transparent; color: #2a2f32; border: 1px solid #b8b1a3; padding: 6px 14px; min-height: 22px; font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif; font-size: 11px; font-weight: 400; letter-spacing: 0.5px; border-radius: 0; cursor: pointer; } .ds-btn:hover { background: #ddd8cd; border-color: #6f7470; } .ds-btn:active { background: #f7f5ef; } .ds-btn:disabled { background: #ddd8cd; color: #6f7470; border-color: #b8b1a3; cursor: not-allowed; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button",
+      "description": "Disconnect or stop action. Danger appears only on hover.",
+      "html": "<button class=\"ds-btn-danger\">stop</button>",
+      "css": ".ds-btn-danger { background: transparent; color: #2a2f32; border: 1px solid #b8b1a3; padding: 6px 14px; min-height: 22px; font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif; font-size: 11px; letter-spacing: 0.5px; border-radius: 0; cursor: pointer; } .ds-btn-danger:hover { color: #b55345; border-color: #b55345; } .ds-btn-danger:disabled { background: #ddd8cd; color: #6f7470; border-color: #b8b1a3; cursor: not-allowed; }"
+    },
+    {
+      "name": "Spinbox",
+      "kind": "input",
+      "refersTo": "spinbox",
+      "description": "Numeric field for stage, exposure, gain, levels, threshold, and interpolation values.",
+      "html": "<input class=\"ds-spinbox\" value=\"+012.350\" />",
+      "css": ".ds-spinbox { background: #f7f5ef; color: #171a1c; border: 1px solid #d4cfc3; padding: 4px 6px; min-height: 22px; min-width: 78px; font-family: 'Iosevka Term', 'JetBrains Mono', 'Cascadia Mono', monospace; font-size: 12px; font-weight: 400; border-radius: 0; outline: none; } .ds-spinbox:focus { border-color: #9fc6dc; } .ds-spinbox:disabled { background: #ddd8cd; color: #6f7470; border-color: #b8b1a3; } .ds-spinbox::selection { background: #7aa9c5; }"
+    },
+    {
+      "name": "Section Header",
+      "kind": "custom",
+      "refersTo": "section-header",
+      "description": "Uppercase label plus 1px rule. This is the section separator instead of a card.",
+      "html": "<div class=\"ds-section\"><span class=\"ds-section-label\">3 SCAN PLAN</span><span class=\"ds-section-rule\"></span></div>",
+      "css": ".ds-section { display: flex; align-items: center; gap: 10px; padding: 14px 0 6px 0; } .ds-section-label { color: #171a1c; font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; white-space: nowrap; } .ds-section-rule { flex: 1 1 auto; height: 1px; background: #d4cfc3; }"
+    },
+    {
+      "name": "Tabs",
+      "kind": "nav",
+      "refersTo": "tab-selected",
+      "description": "Two-mode top tabs for LIVE IMAGE and PSF STACK.",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab is-selected\">LIVE IMAGE</button><button class=\"ds-tab\">PSF STACK</button></div>",
+      "css": ".ds-tabs { display: flex; background: transparent; } .ds-tab { background: transparent; color: #626a6c; border: none; border-bottom: 1px solid transparent; padding: 6px 14px; min-width: 60px; font-family: Inter, 'SF Pro Text', 'Segoe UI', sans-serif; font-size: 11px; letter-spacing: 1px; border-radius: 0; cursor: pointer; } .ds-tab:hover { color: #626a6c; } .ds-tab.is-selected { color: #171a1c; border-bottom-color: #9fc6dc; } .ds-tab:disabled { color: #6f7470; cursor: not-allowed; }"
+    },
+    {
+      "name": "Progress Bar",
+      "kind": "custom",
+      "refersTo": "progressbar",
+      "description": "Scan progress with Signal chunk and centered mono text.",
+      "html": "<div class=\"ds-progress\"><div class=\"ds-progress-fill\" style=\"width: 42%\"></div><span class=\"ds-progress-text\">42 / 100   42%</span></div>",
+      "css": ".ds-progress { position: relative; background: #f7f5ef; border: 1px solid #d4cfc3; height: 14px; border-radius: 0; overflow: hidden; min-width: 200px; } .ds-progress-fill { background: #9fc6dc; height: 100%; } .ds-progress-text { position: absolute; inset: 0; display: grid; place-items: center; color: #626a6c; font-family: 'Iosevka Term', 'JetBrains Mono', monospace; font-size: 10px; }"
+    },
+    {
+      "name": "Stage Legend",
+      "kind": "custom",
+      "refersTo": "stage-view",
+      "description": "Three mutually exclusive scan point states.",
+      "html": "<div class=\"ds-stage-legend\"><span class=\"ds-swatch ds-current\"></span><span>current pos</span><span class=\"ds-swatch ds-sampled\"></span><span>sampled</span><span class=\"ds-swatch ds-planned\"></span><span>planned</span></div>",
+      "css": ".ds-stage-legend { display: flex; align-items: center; gap: 8px 14px; background: #f7f5ef; border-top: 1px solid #d4cfc3; padding: 4px 10px; color: #6f7470; font-family: 'Iosevka Term', 'JetBrains Mono', monospace; font-size: 11px; } .ds-swatch { width: 8px; height: 8px; display: inline-block; } .ds-current { background: #9fc6dc; } .ds-sampled { background: #5f8f83; } .ds-planned { background: #b8b1a3; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Calibrated Plot Bench",
+    "overview": "PSF Scan is a bright, low-drama instrument panel for a single optical bench workflow. The user is moving a stage, watching a camera image, and checking PSF stack output; the interface must stay physically quiet while the plotted data stays legible. The concrete scene is a microscope desk under mixed lab and office lighting, where a dark UI would hide surface detail and a glossy UI would steal attention from the PSF image.\n\nThe system is PySide6 / pyqtgraph first: QSS supplies the control vocabulary, pyqtgraph owns image and plot rendering, and custom widgets only exist when they make measurement faster.",
+    "keyCharacteristics": [
+      "Warm light plotting surfaces, never pure white and never theatrical dark mode.",
+      "Rectangular controls, 1px rules, no shadows, no card stacking.",
+      "Numeric information is mono by default; labels and buttons use a compact sans.",
+      "Signal blue marks current focus and primary action; sampled green marks completed scan points.",
+      "PSF intensity belongs to scientific colormaps, not UI decoration."
+    ],
+    "rules": [
+      { "name": "The Plot Owns Color Rule", "body": "Scientific image colors come from viridis, magma, inferno, plasma, CET-L4, or the volume shell ramp. Do not recolor UI panels to make data feel intense.", "section": "colors" },
+      { "name": "The Three-State Scan Rule", "body": "Planned, sampled, and current scan points use Rule Firm, Sampled, and Signal respectively. Never blend these states or add a fourth decorative scan color.", "section": "colors" },
+      { "name": "The Warm Neutral Rule", "body": "Paper, Panel, Surface, and rules stay warm gray. Pure white, pure black, cold blue-gray, and SaaS navy are prohibited.", "section": "colors" },
+      { "name": "The Mono-For-Numbers Rule", "body": "Any repeated numeric readout uses the mono stack: position, exposure, gain, frame count, FPS, peak, progress, threshold, levels, and interpolation factors.", "section": "typography" },
+      { "name": "The Small Type Rule", "body": "This product does not use hero typography. Anything larger than 13px needs a direct measurement reason.", "section": "typography" },
+      { "name": "The Flat Instrument Rule", "body": "Surfaces do not float. Buttons, inputs, tabs, tooltips, progress bars, and plot panels stay flush with the workbench.", "section": "elevation" },
+      { "name": "The 1px Rule", "body": "Structural separation is 1px: section rules, splitters, borders, axes, top and bottom bars. Thick accent borders and side stripes are forbidden.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep live images, PSF slices, MIP plots, and stage plots on Paper.",
+      "Do use mono typography for every value that changes or aligns with another value.",
+      "Do use SectionHeader and 1px rules instead of cards, nested panels, and decorative containers.",
+      "Do reserve Signal for current focus, primary action, selected state, focus border, progress fill, and checked state.",
+      "Do let pyqtgraph colormaps and volume shell colors communicate intensity and 3D density.",
+      "Do expose plot and render errors as visible status text, not silent fallback success."
+    ],
+    "donts": [
+      "Don't use 黑底科研软件、终端绿/青配黑底.",
+      "Don't use 魁北克蓝 + 黄金 or any navy-and-gold scientific SaaS palette.",
+      "Don't add 大而圆润的阴影卡片 or icon-标题-描述三件套.",
+      "Don't use decorative gradients, glow, background blur, glassmorphism, or gradient text.",
+      "Don't add border-left or border-right accent stripes greater than 1px.",
+      "Don't use border radius. 0px is the project-level shape token.",
+      "Don't make animations or UI transitions longer than 200ms.",
+      "Don't use the red volume shell ramp for buttons, tabs, warnings, or status badges."
+    ]
+  }
+}

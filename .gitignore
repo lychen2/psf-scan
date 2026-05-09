@@ -1,0 +1,49 @@
+# --- Python ---
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- 虚拟环境 ---
+.venv/
+.venv-build/
+venv/
+env/
+
+# --- 编辑器 / IDE / 系统 ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Claude / OMC 工具状态（per-machine, 不入库）---
+.claude/
+.omc/
+
+# --- 实验数据与运行产物（可重生成）---
+psf_data/
+MvSdkLog/
+$(ALLUSERSPROFILE)/
+
+# --- 大型外部二进制（绝不入库；发版者本地放置 installer/vendored/）---
+MVS_SDK_*.exe
+MvCamCtrlSDK_*.zip
+installer/vendored/
+
+# --- 个人 / 客户联系方式（绝不入库；从 example 复制后本地填值）---
+installer/support_contact.json
+
+# --- 打包构建产物 ---
+/build/
+/dist/
+/release/
+*.spec.bak
+*.iss.bak
