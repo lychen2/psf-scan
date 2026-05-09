@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Run JS-based actions on Node 24; default forced June 2026 anyway, opt-in early.
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   build-windows:
     runs-on: windows-latest
