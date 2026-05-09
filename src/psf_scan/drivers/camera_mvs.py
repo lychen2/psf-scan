@@ -1,12 +1,14 @@
 """海康 MVS 相机驱动。
 
 vendor 了 ``src/psf_scan/vendor/MvImport``（来自 ``/opt/MVS/Samples/64/Python/MvImport``）。
-启动时自动找 ``libMvCameraControl.so`` 并设 ``MVCAM_COMMON_RUNENV``，用户零配置。
+启动时自动找 MVS Runtime 库目录、登记到 ``os.add_dll_directory`` 并设
+``MVCAM_COMMON_RUNENV``，用户零配置。
 """
 
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 from ctypes import POINTER, byref, c_ubyte, cast, sizeof
@@ -17,22 +19,43 @@ import numpy as np
 from ..core.camera import CameraBase
 from .camera_mvs_features import MVSAdvancedMixin
 
-# ── 自动定位 MVS Runtime 共享库目录 ────────────────────────────
-_LIB_CANDIDATES = [
+# ── 自动定位 MVS Runtime 库目录 ────────────────────────────────────
+# Linux 库放在 .../lib/64/libMvCameraControl.so
+# Windows 库放在 .../win64/MvCameraControl.dll，根据安装方式可能在多处。
+_LINUX_ROOTS = [
     os.environ.get("MVCAM_COMMON_RUNENV"),
     "/opt/MVS/lib",
     os.path.expanduser("~/MVS/lib"),
-    "C:\\Program Files (x86)\\MVS\\Development\\Libraries",
 ]
-for _p in _LIB_CANDIDATES:
-    if _p and os.path.exists(os.path.join(_p, "64", "libMvCameraControl.so")):
-        os.environ["MVCAM_COMMON_RUNENV"] = _p
-        break
-    if _p and os.path.exists(os.path.join(_p, "MvCameraControl.dll")):
-        os.environ["MVCAM_COMMON_RUNENV"] = _p
-        break
+_WINDOWS_DLL_DIRS = [
+    os.environ.get("MVCAM_COMMON_RUNENV"),
+    r"C:\Program Files (x86)\MVS\Development\Libraries\win64",
+    r"C:\Program Files (x86)\Common Files\MVS\Runtime\Win64_x64",
+    r"C:\Program Files\MVS\Development\Libraries\win64",
+    r"C:\Program Files\Common Files\MVS\Runtime\Win64_x64",
+]
 
-from ..vendor.MvImport import (  # noqa: E402  ── 必须在设环境变量之后
+if sys.platform == "win32":
+    for _d in _WINDOWS_DLL_DIRS:
+        if not _d:
+            continue
+        if os.path.isfile(os.path.join(_d, "MvCameraControl.dll")):
+            # Python 3.8+ 不再读 PATH 解析依赖 DLL，必须显式登记目录。
+            try:
+                os.add_dll_directory(_d)
+            except (AttributeError, OSError):
+                pass
+            os.environ["MVCAM_COMMON_RUNENV"] = _d
+            break
+else:
+    for _root in _LINUX_ROOTS:
+        if not _root:
+            continue
+        if os.path.exists(os.path.join(_root, "64", "libMvCameraControl.so")):
+            os.environ["MVCAM_COMMON_RUNENV"] = _root
+            break
+
+from ..vendor.MvImport import (  # noqa: E402  ── 必须在设环境变量 / add_dll_directory 之后
     MV_ACCESS_Exclusive,
     MV_CC_DEVICE_INFO,
     MV_CC_DEVICE_INFO_LIST,

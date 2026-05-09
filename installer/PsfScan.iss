@@ -10,7 +10,7 @@
 ; be shipped).
 
 #define MyAppName        "PSF Scan"
-#define MyAppVersion "0.0.1"
+#define MyAppVersion "0.0.2"
 #define MyAppPublisher   "PSF Scan"
 #define MyAppExeName     "PsfScan.exe"
 #define MvsExeName       "MVS_SDK_V4_7_0_3_MVFG_V2_7_0_2_VC90_Runtime_STD_251113.exe"
