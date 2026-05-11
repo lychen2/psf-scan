@@ -46,7 +46,7 @@ class StageBase(QObject):
         raise NotImplementedError
 
 
-AVAILABLE_STAGES = ["mock"]
+AVAILABLE_STAGES = ["mock", "pi-m531"]
 
 
 def make_stage(kind: str, **kwargs) -> StageBase:
@@ -56,4 +56,8 @@ def make_stage(kind: str, **kwargs) -> StageBase:
         from ..drivers.stage_mock import MockStage
 
         return MockStage(**kwargs)
+    if kind in {"pi-m531", "pi", "m531"}:
+        from ..drivers.stage_pi import PIStage
+
+        return PIStage(**kwargs)
     raise ValueError(f"未知位移台类型 {kind!r}（可用: {AVAILABLE_STAGES}）")
