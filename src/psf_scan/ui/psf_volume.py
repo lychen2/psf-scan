@@ -98,6 +98,24 @@ class VolumeSurface(QWidget):
     def reset_view(self) -> None:
         self._mip_overlay.reset_view()
 
+    def export_to(self, path: str) -> None:
+        """导出当前 3D 视图：GL widget 用 grabFramebuffer，matplotlib 用 savefig。"""
+        view = self._stack.currentWidget()
+        grabber = getattr(view, "grabFramebuffer", None)
+        if callable(grabber):
+            img = grabber()
+            if not img.save(str(path)):
+                raise IOError(f"无法写入 {path}")
+            return
+        figure = getattr(view, "figure", None)
+        if figure is not None:
+            figure.savefig(str(path), dpi=200, bbox_inches="tight")
+            return
+        # fallback — Qt 自带 grab，对非 GL widget 可用
+        pix = view.grab()
+        if not pix.save(str(path)):
+            raise IOError(f"无法写入 {path}")
+
     def set_volume(
         self,
         volume: np.ndarray,

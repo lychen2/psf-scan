@@ -25,12 +25,14 @@ class MockCamera(CameraBase):
         height: int = 512,
         fps: float = 30.0,
         stage: Optional[StageBase] = None,
-        na: float = 0.7,
-        wavelength_um: float = 0.5,
+        na: float = 0.45,
+        wavelength_um: float = 0.55,
         peak_counts: Optional[float] = None,
         dark_counts: Optional[float] = None,
         bit_depth: int = 8,
         preset: Optional[str] = None,
+        z_focus_um: Optional[float] = None,
+        xy_offset_um: Optional[tuple[float, float]] = None,
     ) -> None:
         super().__init__()
         self._w = int(width)
@@ -51,17 +53,30 @@ class MockCamera(CameraBase):
         self._rng = np.random.default_rng()
 
         N = max(self._w, self._h)
-        R = max(8, N // 8)  # 4× 零填充 → 焦面像元 ≈ λ/(8·NA)
+        # N // 14 → 7× 零填充 → 焦面像元 ≈ λ/(14·NA)，配合 NA=0.45 视觉上 FWHM ~ 8 px
+        R = max(8, N // 14)
         if preset is None:
             self._preset_name, params = random_preset(self._rng)
         else:
             self._preset_name = preset
             params = PRESETS.get(preset, {})
+        # 焦点不在 z=0 — 默认随机摆在 ±8 µm，强迫扫描真去找焦
+        z_focus = float(z_focus_um) if z_focus_um is not None else float(self._rng.uniform(-8.0, 8.0))
+        if xy_offset_um is None:
+            xy_offset_um = (
+                float(self._rng.uniform(-3.0, 3.0)),
+                float(self._rng.uniform(-3.0, 3.0)),
+            )
+        self._z_focus = z_focus
+        self._xy_offset = (float(xy_offset_um[0]), float(xy_offset_um[1]))
         self._psf = PsfModel(
             n_grid=N, pupil_radius=R, na=na, wavelength_um=wavelength_um,
             zernike=params.get("zernike"),
             vortex=params.get("vortex", 0),
             obscuration=params.get("obscuration", 0.0),
+            z_focus_um=z_focus,
+            x_offset_um=self._xy_offset[0],
+            y_offset_um=self._xy_offset[1],
         )
 
         self._timer = QTimer(self)
@@ -81,7 +96,10 @@ class MockCamera(CameraBase):
 
     @property
     def description(self) -> str:
-        return f"mock · pupil={self._preset_name}"
+        return (
+            f"mock · pupil={self._preset_name} · "
+            f"focus@({self._xy_offset[0]:+.1f},{self._xy_offset[1]:+.1f},{self._z_focus:+.2f})µm"
+        )
 
     def connect(self) -> None:
         self._connected = True

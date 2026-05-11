@@ -6,18 +6,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from typing import Optional
 
-from PySide6.QtCore import Qt, QThread, Slot
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThread, QUrl, Slot
+from PySide6.QtGui import QDesktopServices, QFont
 from PySide6.QtWidgets import (
-    QLabel, QMainWindow, QMessageBox, QSplitter, QStatusBar, QTabWidget,
-    QVBoxLayout, QWidget,
+    QFileDialog, QLabel, QMainWindow, QMessageBox, QSplitter, QStatusBar,
+    QTabWidget, QVBoxLayout, QWidget,
 )
 
 from .core.camera import AVAILABLE_CAMERAS, CameraBase, make_camera
 from .core.data_io import save_scan
 from .core.scanner import ScanParams, ScanResult, Scanner
+from .core.snapshot import VideoRecorder, save_snapshot
 from .core.stage import AVAILABLE_STAGES, StageBase, make_stage
 from .ui import theme
 from .ui.camera_view import CameraView
@@ -41,6 +43,7 @@ class MainWindow(QMainWindow):
         self._scanner: Optional[Scanner] = None
         self._scan_thread: Optional[QThread] = None
         self._settings = UserSettings()
+        self._recorder = VideoRecorder()
 
         self.cam_view = CameraView()
         self.stage_view = StageView()
@@ -58,6 +61,7 @@ class MainWindow(QMainWindow):
         self._bind_settings()
         self._wire_signals()
         self.status_strip.set_plan(self.control.plan_text())
+        self._refresh_data_dir_label()
 
     def _build_tabs(self) -> QTabWidget:
         self._tabs = QTabWidget()
@@ -106,6 +110,11 @@ class MainWindow(QMainWindow):
         self.cam_view.black_level_changed.connect(self._on_black_level_changed)
         self.cam_view.frame_rate_changed.connect(self._on_frame_rate_changed)
         self.cam_view.pixel_format_changed.connect(self._on_pixel_format_changed)
+        self.cam_view.snapshot_requested.connect(self._on_snapshot)
+        self.cam_view.record_toggled.connect(self._on_record_toggled)
+        self.psf_view.export_plot_requested.connect(self._on_export_plot)
+        self.status_strip.change_data_dir_requested.connect(self._on_change_data_dir)
+        self.status_strip.open_data_dir_requested.connect(self._on_open_data_dir)
 
     def _bind_settings(self) -> None:
         self.control.bind_settings(self._settings)
@@ -198,6 +207,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_disconnect(self) -> None:
+        if self._recorder.is_recording:
+            self.cam_view.set_recording_state(False)
         if self._camera: self._camera.disconnect(); self._camera = None
         if self._stage: self._stage.disconnect(); self._stage = None
         self.control.set_connected(False)
@@ -242,6 +253,7 @@ class MainWindow(QMainWindow):
         self._scanner.progress.connect(self._on_progress)
         self._scanner.frame_acquired.connect(self._on_acquired)
         self._scanner.finished.connect(self._on_done)
+        self._scanner.canceled.connect(self._on_canceled)
         self._scanner.error.connect(self._show_error)
 
         self.control.set_scanning(True)
@@ -272,23 +284,152 @@ class MainWindow(QMainWindow):
         self.cam_view.update_frame(frame, 0.0)
         self.psf_view.add_frame(idx_0, frame)
 
+    @Slot(object, str)
+    def _on_snapshot(self, frame, cmap_name: str) -> None:
+        try:
+            tiff_path, png_path = save_snapshot(self._settings.data_dir(), frame, cmap_name)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "快照失败", str(exc))
+            return
+        self.statusBar().showMessage(f"snapshot · {tiff_path.name} + .png", 5000)
+        self.status_strip.set_message(f"snapshot · {tiff_path.name}")
+
+    @Slot(bool)
+    def _on_record_toggled(self, on: bool) -> None:
+        if on:
+            try:
+                path = self._recorder.start(self._settings.data_dir())
+            except Exception as exc:  # noqa: BLE001
+                QMessageBox.warning(self, "录像失败", str(exc))
+                self.cam_view.set_recording_state(False)
+                return
+            self.statusBar().showMessage(f"recording · {path.name}", 0)
+            self.status_strip.set_message(f"recording · {path.name}")
+            self.cam_view.frame_rate_changed  # noop; 仅占位避免 lint
+            if self._camera is not None:
+                self._camera.frame_ready.connect(self._on_record_frame)
+            return
+        if self._camera is not None:
+            try:
+                self._camera.frame_ready.disconnect(self._on_record_frame)
+            except (RuntimeError, TypeError):
+                pass
+        try:
+            path, n_frames, duration = self._recorder.stop()
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "录像结束失败", str(exc))
+            return
+        msg = f"saved {n_frames} frames in {duration:.1f}s · {path.name}"
+        self.statusBar().showMessage(msg, 8000)
+        self.status_strip.set_message(msg)
+
+    @Slot(object, float)
+    def _on_record_frame(self, frame, ts: float) -> None:
+        self._recorder.append(frame)
+
+    @Slot(int)
+    def _on_canceled(self, frames_collected: int) -> None:
+        """扫描被用户停掉 — 不算 error，状态走 idle/saved，已采集帧保留。"""
+        if frames_collected == 0:
+            self._teardown_scan_thread()
+            self.control.set_scanning(False)
+            self.control.set_status("scan canceled")
+            self.status_strip.set_state(STATE_IDLE, "canceled")
+            self.status_strip.set_message("scan canceled · no frames")
+            self.statusBar().showMessage("scan canceled", 5000)
+        # 有帧的话，_on_done 会照常处理保存与切换视图
+
     @Slot(object)
     def _on_done(self, result: ScanResult) -> None:
         self._teardown_scan_thread()
         self.control.set_scanning(False)
-        try:
-            target = save_scan(Path("./psf_data"), result)
+        target = self._save_with_fallback(result)
+        if target is not None:
             self.control.set_status(f"saved · {target.name}")
             self.status_strip.set_state(STATE_SAVED, "saved")
             self.status_strip.set_message(target.name)
             self.statusBar().showMessage(f"saved · {target}", 8000)
+        self.psf_view.set_data(result.frames, result.positions)
+        self._tabs.setCurrentIndex(1)
+
+    def _save_with_fallback(self, result: ScanResult) -> Optional[Path]:
+        """先用配置的 data_dir 存；失败 (权限/不存在) 弹 dialog 让用户重选。"""
+        primary = self._settings.data_dir()
+        try:
+            return save_scan(primary, result)
+        except (PermissionError, OSError) as exc:
+            QMessageBox.warning(
+                self, "保存失败",
+                f"默认目录 {primary} 不可写：\n{exc}\n\n请选一个新目录。",
+            )
+        chosen = QFileDialog.getExistingDirectory(
+            self, "选择数据保存目录", str(Path.home()),
+        )
+        if not chosen:
+            self.control.set_status("save canceled · data kept in memory")
+            self.status_strip.set_state(STATE_ERROR, "not saved")
+            self.status_strip.set_message("保存已取消，数据仍在内存里")
+            return None
+        try:
+            target = save_scan(Path(chosen), result)
         except Exception as exc:  # noqa: BLE001
-            QMessageBox.warning(self, "保存失败", str(exc))
+            QMessageBox.critical(self, "保存失败", str(exc))
             self.control.set_status(f"save failed: {exc!r}")
             self.status_strip.set_state(STATE_ERROR, "error")
             self.status_strip.set_message(str(exc))
-        self.psf_view.set_data(result.frames, result.positions)
-        self._tabs.setCurrentIndex(1)
+            return None
+        self._settings.set_data_dir(chosen)
+        self._refresh_data_dir_label()
+        return target
+
+    @Slot()
+    def _on_change_data_dir(self) -> None:
+        current = self._settings.data_dir()
+        chosen = QFileDialog.getExistingDirectory(
+            self, "选择数据保存目录", str(current if current.exists() else Path.home()),
+        )
+        if chosen:
+            self._settings.set_data_dir(chosen)
+            self._refresh_data_dir_label()
+            self.statusBar().showMessage(f"data folder · {chosen}", 4000)
+
+    @Slot()
+    def _on_open_data_dir(self) -> None:
+        path = self._settings.data_dir()
+        try:
+            path.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            QMessageBox.warning(self, "目录不可访问", str(exc))
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
+
+    @Slot()
+    def _on_export_plot(self) -> None:
+        if not self.psf_view.has_data():
+            QMessageBox.information(self, "导出图像", "还没有 PSF 数据，先扫描或加载一份。")
+            return
+        base = self._settings.data_dir() / "plots"
+        try:
+            base.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            base = Path.home()
+        default = base / time.strftime("psf_plot_%Y%m%d_%H%M%S.png", time.localtime())
+        chosen, _ = QFileDialog.getSaveFileName(
+            self, "导出 PSF 图像", str(default),
+            "PNG image (*.png);;JPEG image (*.jpg);;TIFF image (*.tif)",
+        )
+        if not chosen:
+            return
+        try:
+            self.psf_view.export_plot_to(chosen)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, "导出失败", str(exc))
+            return
+        self.statusBar().showMessage(f"plot exported · {Path(chosen).name}", 5000)
+        self.status_strip.set_message(f"plot · {Path(chosen).name}")
+
+    def _refresh_data_dir_label(self) -> None:
+        self.status_strip.set_data_dir(str(self._settings.data_dir()))
 
     def _teardown_scan_thread(self) -> None:
         if self._scan_thread:

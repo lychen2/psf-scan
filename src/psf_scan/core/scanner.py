@@ -72,12 +72,17 @@ class ScanResult:
     finished_at: float
 
 
+class ScanCanceled(Exception):
+    """扫描被用户取消 — 走静默退出而不是 error.emit。"""
+
+
 class Scanner(QObject):
     """扫描 worker。``run`` 在自己的 QThread 里执行。"""
 
     progress = Signal(int, int, float, float, float)   # idx_1based, total, x, y, z
     frame_acquired = Signal(int, float, float, float, object)  # idx_0based, x, y, z, frame
     finished = Signal(object)  # ScanResult
+    canceled = Signal(int)     # 已采集帧数 (>=0)
     error = Signal(str)
 
     def __init__(self, stage: StageBase, camera: CameraBase) -> None:
@@ -104,19 +109,28 @@ class Scanner(QObject):
             pts = self._params.points()
             frames: list[np.ndarray] = []
             ts: list[float] = []
-            for idx, (x, y, z) in enumerate(pts):
-                if self._cancel:
-                    break
-                position = (float(x), float(y), float(z))
-                if not self._move_and_wait(position):
-                    self.error.emit("移动超时或被取消")
-                    break
-                frame = self._acquire_average_frame()
-                t = time.time() - t0
-                frames.append(frame)
-                ts.append(t)
-                self.progress.emit(idx + 1, len(pts), float(x), float(y), float(z))
-                self.frame_acquired.emit(idx, float(x), float(y), float(z), frame)
+            try:
+                for idx, (x, y, z) in enumerate(pts):
+                    if self._cancel:
+                        break
+                    position = (float(x), float(y), float(z))
+                    if not self._move_and_wait(position):
+                        if self._cancel:
+                            break
+                        self.error.emit("移动超时")
+                        return
+                    frame = self._acquire_average_frame()
+                    t = time.time() - t0
+                    frames.append(frame)
+                    ts.append(t)
+                    self.progress.emit(idx + 1, len(pts), float(x), float(y), float(z))
+                    self.frame_acquired.emit(idx, float(x), float(y), float(z), frame)
+            except ScanCanceled:
+                pass
+
+            if self._cancel and not frames:
+                self.canceled.emit(0)
+                return
             if not frames:
                 self.error.emit("未采集到任何帧")
                 return
@@ -129,7 +143,11 @@ class Scanner(QObject):
                 started_at=t0,
                 finished_at=time.time(),
             )
-            self.finished.emit(result)
+            if self._cancel:
+                self.finished.emit(result)
+                self.canceled.emit(len(frames))
+            else:
+                self.finished.emit(result)
         except Exception as exc:  # noqa: BLE001
             self.error.emit(f"扫描出错: {exc!r}")
 
@@ -174,7 +192,7 @@ class Scanner(QObject):
         accumulator: np.ndarray | None = None
         for sample_idx in range(sample_count):
             if self._cancel:
-                raise RuntimeError("扫描已取消")
+                raise ScanCanceled()
             frame = self._camera.grab_one()
             data = frame.astype(np.float32, copy=False)
             accumulator = data.copy() if accumulator is None else accumulator + data
@@ -195,7 +213,7 @@ class Scanner(QObject):
         """丢弃移动过程中已排进 SDK 队列的旧 z 位置帧。"""
         for _ in range(WARMUP_FRAMES):
             if self._cancel:
-                raise RuntimeError("扫描已取消")
+                raise ScanCanceled()
             try:
                 self._camera.grab_one(timeout_ms=WARMUP_TIMEOUT_MS)
             except Exception:  # noqa: BLE001

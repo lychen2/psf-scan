@@ -38,18 +38,26 @@ ZERNIKE = {
 # 这里取 0.06–0.12 (Strehl ≈ 0.6–0.85)，看得到形态但不毁掉成像。
 PRESETS: dict[str, dict] = {
     "diffraction-limited": {},
-    "astigmatism":      {"zernike": {"astig0": 0.10}},
-    "coma":              {"zernike": {"coma_x": 0.09}},
-    "trefoil":           {"zernike": {"trefoil0": 0.09}},
-    "spherical":         {"zernike": {"spherical": 0.10}},
-    "spherical-strong":  {"zernike": {"spherical": 0.18}},
-    "mixed-mild":        {"zernike": {"astig45": 0.05, "spherical": 0.06}},
-    "mixed-strong":      {"zernike": {"astig0": 0.07, "coma_y": 0.08, "spherical": 0.07}},
-    "vortex-1":          {"vortex": 1},                       # 螺旋相位 m=1
-    "vortex-2":          {"vortex": 2},                       # m=2 donut 更大
-    "annular":           {"obscuration": 0.55},               # 环形光阑 (Bessel-like)
-    "annular+spherical": {"obscuration": 0.45, "zernike": {"spherical": 0.08}},
-    "vortex+coma":       {"vortex": 1, "zernike": {"coma_x": 0.08}},
+    "astigmatism":         {"zernike": {"astig0": 0.10}},
+    "astigmatism-strong":  {"zernike": {"astig45": 0.18}},
+    "coma":                {"zernike": {"coma_x": 0.09}},
+    "coma-strong":         {"zernike": {"coma_y": 0.16}},
+    "trefoil":             {"zernike": {"trefoil0": 0.09}},
+    "trefoil-skewed":      {"zernike": {"trefoil30": 0.13}},
+    "spherical":           {"zernike": {"spherical": 0.10}},
+    "spherical-strong":    {"zernike": {"spherical": 0.18}},
+    "spherical-2nd":       {"zernike": {"spherical2": 0.12}},
+    "mixed-mild":          {"zernike": {"astig45": 0.05, "spherical": 0.06}},
+    "mixed-strong":        {"zernike": {"astig0": 0.07, "coma_y": 0.08, "spherical": 0.07}},
+    "mixed-very-strong":   {"zernike": {"astig0": 0.10, "coma_x": 0.10, "trefoil0": 0.08, "spherical": 0.09}},
+    "vortex-1":            {"vortex": 1},
+    "vortex-2":            {"vortex": 2},
+    "vortex-3":            {"vortex": 3},
+    "annular":             {"obscuration": 0.55},
+    "annular+spherical":   {"obscuration": 0.45, "zernike": {"spherical": 0.08}},
+    "annular-tight":       {"obscuration": 0.70},
+    "vortex+coma":         {"vortex": 1, "zernike": {"coma_x": 0.08}},
+    "vortex+spherical":    {"vortex": 2, "zernike": {"spherical": 0.10}},
 }
 
 
@@ -65,6 +73,9 @@ class PsfModel:
         zernike: Optional[dict[str, float]] = None,
         vortex: int = 0,
         obscuration: float = 0.0,
+        z_focus_um: float = 0.0,
+        x_offset_um: float = 0.0,
+        y_offset_um: float = 0.0,
     ) -> None:
         self.N = int(n_grid)
         self.R = int(pupil_radius)
@@ -73,6 +84,9 @@ class PsfModel:
         self.zernike = zernike or {}
         self.vortex = int(vortex)
         self.obscuration = float(obscuration)
+        self.z_focus_um = float(z_focus_um)
+        self.x_offset_um = float(x_offset_um)
+        self.y_offset_um = float(y_offset_um)
         self._build()
 
     @property
@@ -109,18 +123,23 @@ class PsfModel:
         # 散焦 / 倾斜系数 (per µm)
         self._k_def = float(np.pi) * (self.na ** 2) / self.lam       # rad / (µm · ρ²)
         self._k_tilt = 2 * float(np.pi) * self.na / self.lam         # rad / (µm · x_norm)
-        # 参考峰 (在焦无位移) — 用于稳定振幅归一
-        self.ref_peak = float(self.render(0.0, 0.0, 0.0).max())
+        # 参考峰 (在焦点处) — 用于稳定振幅归一
+        self.ref_peak = float(self.render(self.z_focus_um, self.x_offset_um, self.y_offset_um).max())
 
     def render(self, z_um: float = 0.0, x_um: float = 0.0, y_um: float = 0.0) -> np.ndarray:
-        """计算 (z, x, y) 处的 PSF 强度图，shape (N, N)。"""
+        """计算 (z, x, y) 处的 PSF 强度图，shape (N, N)。
+
+        z_focus_um / x_offset_um / y_offset_um 用作 mock 标定原点：当 stage
+        移动到 (x_offset, y_offset, z_focus) 时正好成像在焦中心。
+        """
+        z_eff = float(z_um) - self.z_focus_um
+        x_eff = float(x_um) - self.x_offset_um
+        y_eff = float(y_um) - self.y_offset_um
         np.copyto(self._phi_buf, self._phi_static)
-        if z_um:
-            self._phi_buf += self._k_def * float(z_um) * self._rho_sq
-        if x_um or y_um:
-            self._phi_buf += self._k_tilt * (
-                float(x_um) * self._x + float(y_um) * self._y
-            )
+        if z_eff:
+            self._phi_buf += self._k_def * z_eff * self._rho_sq
+        if x_eff or y_eff:
+            self._phi_buf += self._k_tilt * (x_eff * self._x + y_eff * self._y)
         E_pupil = self._mask * np.exp(1j * self._phi_buf)
         E_focal = np.fft.fftshift(np.fft.fft2(np.fft.ifftshift(E_pupil)))
         return (E_focal.real * E_focal.real + E_focal.imag * E_focal.imag)

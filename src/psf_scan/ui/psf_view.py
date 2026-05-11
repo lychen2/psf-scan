@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from . import theme
@@ -15,6 +16,8 @@ from .settings import UserSettings
 
 
 class PSFView(QWidget):
+    export_plot_requested = Signal()
+
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setStyleSheet(f"background:{theme.BG0};")
@@ -35,8 +38,16 @@ class PSFView(QWidget):
         self._controls.auto_toggled.connect(self._on_auto_toggled)
         self._controls.rect_zoom_changed.connect(self._plot.set_rect_zoom_mode)
         self._controls.reset_view_requested.connect(self._plot.reset_views)
+        self._controls.export_plot_requested.connect(self.export_plot_requested.emit)
         layout.addWidget(self._plot, stretch=1)
         layout.addWidget(self._controls)
+
+    def export_plot_to(self, path: str) -> None:
+        """由 app.py 在弹出 QFileDialog 选好路径后调用。"""
+        self._plot.export_to(path)
+
+    def has_data(self) -> bool:
+        return self._volume is not None
 
     def bind_settings(self, settings: UserSettings) -> None:
         self._controls.bind_settings(settings)

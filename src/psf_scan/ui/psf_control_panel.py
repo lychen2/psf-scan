@@ -32,6 +32,7 @@ class PsfControlPanel(QWidget):
     auto_toggled = Signal(bool)
     rect_zoom_changed = Signal(bool)
     reset_view_requested = Signal()
+    export_plot_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -213,13 +214,16 @@ class PsfControlPanel(QWidget):
         self.status_label = HintLabel("scan result loads here")
         self.btn_save_preset = _btn("save…", enabled=True)
         self.btn_load_preset = _btn("load…", enabled=True)
+        self.btn_export_plot = _btn("export plot…", enabled=True)
         self.btn_save_preset.clicked.connect(lambda: psf_preset.prompt_save(self))
         self.btn_load_preset.clicked.connect(lambda: psf_preset.prompt_load(self))
+        self.btn_export_plot.clicked.connect(self.export_plot_requested.emit)
         info = QHBoxLayout()
         info.setSpacing(20)
         for widget in (self.idx_label, self.pos_label, self.peak_label):
             info.addWidget(widget)
         info.addWidget(self.status_label, stretch=1)
+        info.addWidget(self.btn_export_plot)
         info.addWidget(self.btn_save_preset)
         info.addWidget(self.btn_load_preset)
         return info

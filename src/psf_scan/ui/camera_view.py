@@ -36,6 +36,8 @@ class CameraView(QWidget):
     frame_rate_changed = Signal(float)
     pixel_format_changed = Signal(str)
     metrics_changed = Signal(int, float, bool)
+    snapshot_requested = Signal(object, str)         # frame, cmap_name
+    record_toggled = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -77,6 +79,8 @@ class CameraView(QWidget):
         self._levels_set = False
         self._max_val = 255
         self._saturated = False
+        self._last_raw_frame: np.ndarray | None = None
+        self._recording = False
 
     def _build_empty_state(self, text: str) -> QLabel:
         label = QLabel(text)
@@ -127,6 +131,18 @@ class CameraView(QWidget):
         self.cb_cmap.setMinimumWidth(92)
         self.cb_cmap.currentTextChanged.connect(self._on_cmap_changed)
         h.addWidget(self.cb_cmap)
+
+        h.addSpacing(8)
+        self.btn_snapshot = self._action_button("snapshot")
+        self.btn_snapshot.setEnabled(False)
+        self.btn_snapshot.clicked.connect(self._emit_snapshot)
+        h.addWidget(self.btn_snapshot)
+
+        self.btn_record = self._action_button("record")
+        self.btn_record.setCheckable(True)
+        self.btn_record.setEnabled(False)
+        self.btn_record.toggled.connect(self._on_record_toggled)
+        h.addWidget(self.btn_record)
 
         h.addSpacing(8)
         self.btn_advanced = QToolButton()
@@ -189,6 +205,10 @@ class CameraView(QWidget):
     @Slot(object, float)
     def update_frame(self, frame: np.ndarray, ts: float) -> None:
         self._image_stack.setCurrentWidget(self._iv)
+        self._last_raw_frame = frame
+        if not self.btn_snapshot.isEnabled():
+            self.btn_snapshot.setEnabled(True)
+            self.btn_record.setEnabled(True)
         self._frames += 1
         elapsed = time.time() - self._t0
         if elapsed >= 0.5:
@@ -257,6 +277,40 @@ class CameraView(QWidget):
         self._advanced.setVisible(on)
         self.btn_advanced.setText("▴ advanced" if on else "▾ advanced")
 
+    def _action_button(self, label: str) -> QToolButton:
+        btn = QToolButton()
+        btn.setText(label)
+        btn.setStyleSheet(
+            f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
+            f"background:{theme.BG0};padding:2px 10px;"
+            "font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;"
+            "font-weight:600;}"
+            f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
+            f"QToolButton:disabled{{color:{theme.TEXT3};border-color:{theme.BORDER0};}}"
+            f"QToolButton:checked{{color:{theme.BG0};background:{theme.DANGER};"
+            f"border-color:{theme.DANGER};}}"
+        )
+        return btn
+
+    @Slot()
+    def _emit_snapshot(self) -> None:
+        if self._last_raw_frame is None:
+            return
+        self.snapshot_requested.emit(np.array(self._last_raw_frame, copy=True), self._cmap_name)
+
+    @Slot(bool)
+    def _on_record_toggled(self, on: bool) -> None:
+        self._recording = on
+        self.btn_record.setText("● REC" if on else "record")
+        self.record_toggled.emit(on)
+
+    def set_recording_state(self, recording: bool) -> None:
+        """外部 (app.py) 因为 IO 失败回滚 toggle 用。"""
+        self.btn_record.blockSignals(True)
+        self.btn_record.setChecked(recording)
+        self._on_record_toggled(recording)
+        self.btn_record.blockSignals(False)
+
     def bind_settings(self, settings) -> None:
         """把 colormap 选择持久化到 QSettings。"""
         settings.bind_combo("camera/colormap", self.cb_cmap)
@@ -270,8 +324,13 @@ class CameraView(QWidget):
         self._levels_set = False
         self._frames = 0
         self._fps = 0.0
+        self._last_raw_frame = None
         self.sp_exp.setEnabled(False)
         self.sp_gain.setEnabled(False)
+        self.btn_snapshot.setEnabled(False)
+        if self._recording:
+            self.set_recording_state(False)
+        self.btn_record.setEnabled(False)
         self._advanced.reset()
         self._empty.setText(EMPTY_DISCONNECTED_TEXT)
         self._image_stack.setCurrentWidget(self._empty)

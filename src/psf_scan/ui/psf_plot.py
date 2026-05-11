@@ -71,6 +71,16 @@ class PsfPlotWidget(QWidget):
             live=live,
         )
 
+    def export_to(self, path: str) -> None:
+        """统一导出当前 plot — 2D 走 pyqtgraph exporter，3D 走 framebuffer。"""
+        from pathlib import Path as _Path
+        target = str(_Path(path))
+        if self._stack.currentWidget() is self._volume:
+            self._volume.export_to(target)
+        else:
+            from pyqtgraph.exporters import ImageExporter
+            ImageExporter(self._images.scene()).export(target)
+
 
 class ImageSurface(pg.GraphicsLayoutWidget):
     def __init__(self) -> None:
