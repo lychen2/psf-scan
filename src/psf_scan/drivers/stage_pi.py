@@ -30,21 +30,27 @@ class PIStage(StageBase):
         controller: str = "C-863",
         stage: str = "M-531.DG",
         refmode: str = "FRF",
+        interface: str = "usb",
         serialnum: Optional[str] = None,
         ip: Optional[str] = None,
         comport: Optional[int] = None,
         baudrate: int = 115200,
         velocity_um_s: Optional[float] = None,
+        skip_referencing: bool = False,
     ) -> None:
         super().__init__()
         self._controller = controller
         self._stage_name = stage
-        self._refmode = refmode
-        self._serialnum = serialnum
-        self._ip = ip
-        self._comport = comport
+        self._refmode: Optional[str] = (
+            None if (skip_referencing or not refmode or str(refmode).lower() == "none")
+            else str(refmode).upper()
+        )
+        self._interface = (interface or "usb").lower()
+        self._serialnum = serialnum or None
+        self._ip = ip or None
+        self._comport = comport if comport else None
         self._baudrate = baudrate
-        self._velocity_um_s = velocity_um_s
+        self._velocity_um_s = velocity_um_s if velocity_um_s else None
 
         self._dev = None  # GCSDevice; 在 connect() 里 lazy 构造
         self._axis_id: Optional[str] = None
@@ -144,13 +150,18 @@ class PIStage(StageBase):
     def _open_link(self) -> None:
         if self._dev is None:
             raise RuntimeError("GCSDevice 未初始化")
-        if self._ip:
+        iface = self._interface
+        if iface == "tcp" or self._ip:
+            if not self._ip:
+                raise RuntimeError("TCP 模式缺 IP")
             self._dev.ConnectTCPIP(ipaddress=self._ip)
             return
-        if self._comport is not None:
+        if iface == "rs232" or self._comport:
+            if not self._comport:
+                raise RuntimeError("RS232 模式缺 COM 端口")
             self._dev.ConnectRS232(comport=self._comport, baudrate=self._baudrate)
             return
-        # USB: serialnum 给了就直连, 没给就枚举选第一个
+        # USB
         if self._serialnum:
             self._dev.ConnectUSB(serialnum=self._serialnum)
             return

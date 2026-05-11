@@ -81,6 +81,10 @@ class StageView(QWidget):
         self._tick.timeout.connect(self._refresh)
         self._tick.start()
 
+    def set_single_axis(self, on: bool) -> None:
+        """单轴 stage (M-531): 隐藏 XY 平面, Z 条形独占。"""
+        self._xy.setVisible(not on)
+
     def _make_xy(self) -> pg.PlotWidget:
         pw = pg.PlotWidget()
         pw.setBackground(theme.BG0)

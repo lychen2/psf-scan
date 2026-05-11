@@ -44,6 +44,26 @@ class UserSettings:
     def set_data_dir(self, path: Path | str) -> None:
         self.set_value(DATA_DIR_KEY, str(Path(path)))
 
+    def pi_params(self) -> dict:
+        """读 PI 连接参数 (供 PIStage 构造)。"""
+        s = self._settings
+        return {
+            "controller": str(s.value("pi/controller", "C-863")),
+            "stage": str(s.value("pi/stage", "M-531.DG")),
+            "refmode": str(s.value("pi/refmode", "FRF")),
+            "interface": str(s.value("pi/interface", "usb")),
+            "serialnum": str(s.value("pi/serialnum", "")),
+            "ip": str(s.value("pi/ip", "")),
+            "comport": int(s.value("pi/comport", 0) or 0),
+            "baudrate": int(s.value("pi/baudrate", 115200)),
+            "velocity_um_s": float(s.value("pi/velocity_um_s", 0) or 0),
+            "skip_referencing": _bool_value(s.value("pi/skip_referencing", False)),
+        }
+
+    def set_pi_params(self, params: dict) -> None:
+        for key, value in params.items():
+            self.set_value(f"pi/{key}", value)
+
     def bind_combo(self, key: str, control: QComboBox) -> None:
         text = str(self._settings.value(key, control.currentText()))
         index = control.findText(text)

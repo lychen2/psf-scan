@@ -32,6 +32,8 @@ class ControlPanel(QWidget):
     scan_started = Signal(object)
     scan_canceled = Signal()
     plan_changed = Signal(str)
+    pi_settings_requested = Signal()
+    single_axis_changed = Signal(bool)
 
     def __init__(self, stages: list[str], cameras: list[str], parent=None) -> None:
         super().__init__(parent)
@@ -76,18 +78,47 @@ class ControlPanel(QWidget):
     def _devices(self, stages, cameras) -> QWidget:
         self.cb_stage = _combo(stages)
         self.cb_cam = _combo(cameras)
+        self.btn_pi_settings = _btn("PI…", enabled=False)
         self.btn_conn = _btn("connect", primary=True)
         self.btn_disc = _btn("disconnect", danger=True, enabled=False)
         self.lbl_device_state = ValueLabel("offline")
         self.btn_conn.clicked.connect(lambda: self.connect_requested.emit(
             self.cb_stage.currentText(), self.cb_cam.currentText()))
         self.btn_disc.clicked.connect(self.disconnect_requested.emit)
+        self.btn_pi_settings.clicked.connect(self.pi_settings_requested.emit)
+        self.cb_stage.currentTextChanged.connect(self._on_stage_kind_changed)
         return _section("1 Devices", [
-            _kv("stage driver", self.cb_stage),
+            _kv("stage driver", _row_widget(self.cb_stage, self.btn_pi_settings, _stretch=True)),
             _kv("camera driver", self.cb_cam),
             _row(self.btn_conn, self.btn_disc, _stretch=True),
             _kv("state", self.lbl_device_state),
         ])
+
+    @Slot(str)
+    def _on_stage_kind_changed(self, kind: str) -> None:
+        is_pi = self._is_single_axis(kind)
+        self.btn_pi_settings.setEnabled(is_pi)
+        # 单轴 stage → xy 灰掉 + 取消勾选
+        if not hasattr(self, "cb_xy"):
+            self.single_axis_changed.emit(is_pi)
+            return
+        if is_pi:
+            self.cb_xy.blockSignals(True)
+            self.cb_xy.setChecked(False)
+            self.cb_xy.blockSignals(False)
+            self._toggle_xy(False)
+            self._update_scan_summary()
+        self.cb_xy.setEnabled(not is_pi)
+        for n in ("sp_x", "sp_y"):
+            getattr(self, n).setEnabled(not is_pi)
+        if is_pi:
+            self.sp_x.setValue(0.0)
+            self.sp_y.setValue(0.0)
+        self.single_axis_changed.emit(is_pi)
+
+    @staticmethod
+    def _is_single_axis(kind: str) -> bool:
+        return kind.lower() in {"pi-m531", "pi", "m531"}
 
     def _stage(self) -> QWidget:
         self.sp_x, self.sp_y, self.sp_z = (_dspin(-1000, 1000, 0.0) for _ in range(3))
@@ -252,6 +283,7 @@ class ControlPanel(QWidget):
         for key, control in self._parameter_controls.items():
             settings.bind_spin(f"scan/{key}", control)
         self._toggle_xy(self.cb_xy.isChecked())
+        self._on_stage_kind_changed(self.cb_stage.currentText())
         self._update_scan_summary()
 
     def _set_scan_inputs_enabled(self, enabled: bool) -> None:

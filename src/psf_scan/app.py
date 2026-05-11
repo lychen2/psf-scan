@@ -24,6 +24,7 @@ from .core.stage import AVAILABLE_STAGES, StageBase, make_stage
 from .ui import theme
 from .ui.camera_view import CameraView
 from .ui.control_panel import ControlPanel
+from .ui.pi_connect_dialog import PIConnectDialog
 from .ui.psf_view import PSFView
 from .ui.settings import UserSettings
 from .ui.stage_view import StageView
@@ -103,6 +104,8 @@ class MainWindow(QMainWindow):
         self.control.scan_started.connect(self._on_scan_start)
         self.control.scan_canceled.connect(self._on_scan_cancel)
         self.control.plan_changed.connect(self.status_strip.set_plan)
+        self.control.pi_settings_requested.connect(self._on_pi_settings)
+        self.control.single_axis_changed.connect(self.stage_view.set_single_axis)
         self.cam_view.metrics_changed.connect(self.status_strip.set_camera)
         self.cam_view.exposure_changed.connect(self._on_exposure_changed)
         self.cam_view.gain_changed.connect(self._on_gain_changed)
@@ -122,10 +125,41 @@ class MainWindow(QMainWindow):
         self.cam_view.bind_settings(self._settings)
 
     # ── connection ────────────────────────────────
+    def _stage_kwargs(self, stage_kind: str) -> Optional[dict]:
+        """单轴 PI: 弹 FRF 警告 + 加载 settings 里的连接参数。其它 stage 返回 {}。"""
+        if stage_kind.lower() not in {"pi-m531", "pi", "m531"}:
+            return {}
+        params = self._settings.pi_params()
+        if not params.get("skip_referencing"):
+            msg = (
+                f"位移台 {params['stage']} 将在连接时执行 {params['refmode']} 寻参。\n"
+                "stage 会机械移动, 最多约半行程 (M-531 ~150 mm).\n\n"
+                "确认平台周围无样品架/镜筒/手指, 再点 Yes 开始连接.\n"
+                "选 No 则取消连接.\n"
+                "若已对过零且未掉电, 取消后点 PI… 勾选 skip referencing 再连."
+            )
+            ret = QMessageBox.question(
+                self, "PI 寻参确认", msg,
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+            )
+            if ret != QMessageBox.Yes:
+                return None
+        return params
+
+    @Slot()
+    def _on_pi_settings(self) -> None:
+        dlg = PIConnectDialog(self._settings.pi_params(), parent=self)
+        if dlg.exec() == PIConnectDialog.DialogCode.Accepted:
+            self._settings.set_pi_params(dlg.values())
+            self.statusBar().showMessage("PI 连接参数已保存", 4000)
+
     @Slot(str, str)
     def _on_connect(self, stage_kind: str, cam_kind: str) -> None:
+        stage_kwargs = self._stage_kwargs(stage_kind)
+        if stage_kwargs is None:
+            return  # 用户取消 FRF 警告
         try:
-            stage = make_stage(stage_kind)
+            stage = make_stage(stage_kind, **stage_kwargs)
             kw = {"stage": stage} if cam_kind == "mock" else {}
             camera = make_camera(cam_kind, **kw)
         except Exception as exc:  # noqa: BLE001
@@ -174,14 +208,14 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_exposure_changed(self, exposure_us: int) -> None:
         if not self._camera:
-            raise RuntimeError("相机未连接，不能设置曝光")
+            return  # 相机已断 (例如关窗口期间, spinbox 收尾触发) — 安全忽略
         self._camera.set_exposure_us(exposure_us)
         self._settings.set_value("camera/exposure_us", exposure_us)
 
     @Slot(float)
     def _on_gain_changed(self, gain: float) -> None:
         if not self._camera:
-            raise RuntimeError("相机未连接，不能设置增益")
+            return
         self._camera.set_gain(gain)
         self._settings.set_value("camera/gain", gain)
 
@@ -445,8 +479,53 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"error · {msg}", 6000)
 
     def closeEvent(self, ev) -> None:
-        if self._scanner:
-            self._scanner.cancel()
-        self._teardown_scan_thread()
-        self._on_disconnect()
+        if not self._confirm_exit():
+            ev.ignore()
+            return
+        self._shutdown_in_order()
         super().closeEvent(ev)
+
+    def _confirm_exit(self) -> bool:
+        """关窗前确认 — 扫描中 / 录像中 / 连着设备时都问一下。"""
+        busy = []
+        if self._scanner is not None:
+            busy.append("扫描进行中")
+        if self._recorder.is_recording:
+            busy.append("录像进行中")
+        if self._camera is not None or self._stage is not None:
+            busy.append("设备已连接")
+        if not busy:
+            return True
+        msg = "退出前要做:\n  · " + "\n  · ".join(busy) + "\n\n确定退出?"
+        ret = QMessageBox.question(
+            self, "退出 PSF Scan", msg,
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        return ret == QMessageBox.Yes
+
+    def _shutdown_in_order(self) -> None:
+        """严格顺序: 扫描 → 录像 → 相机 → 位移台. 每一步独立 try 防止后续阻塞."""
+        # 1) 扫描器
+        try:
+            if self._scanner is not None:
+                self._scanner.cancel()
+                self._teardown_scan_thread()
+        except Exception:  # noqa: BLE001
+            pass
+        # 2) 录像
+        try:
+            if self._recorder.is_recording:
+                self.cam_view.set_recording_state(False)
+        except Exception:  # noqa: BLE001
+            pass
+        # 3) 断开相机信号, 让残留 spinbox/slider 事件不再触达硬件
+        if self._camera is not None:
+            try:
+                self._camera.frame_ready.disconnect()
+            except (RuntimeError, TypeError):
+                pass
+        # 4) 走标准 disconnect 序列 (会同时停 streaming 与 stage timer)
+        try:
+            self._on_disconnect()
+        except Exception:  # noqa: BLE001
+            pass
