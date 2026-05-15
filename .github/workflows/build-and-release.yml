@@ -258,6 +258,7 @@ jobs:
             artifacts/PsfScan-linux-deb/*
             artifacts/PsfScan-linux-appimage/*
           generate_release_notes: true
+          overwrite_files: true
           draft: false
           prerelease: false
         env:

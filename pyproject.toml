@@ -16,6 +16,7 @@ dependencies = [
     "tifffile>=2024.1",
     "scipy>=1.11",
     "matplotlib>=3.8",
+    "pyserial>=3.5",
 ]
 
 [project.scripts]
