@@ -16,6 +16,8 @@ dependencies = [
     "tifffile>=2024.1",
     "scipy>=1.11",
     "matplotlib>=3.8",
+    "Pillow>=10",
+    "pipython>=2.10",
     "pyserial>=3.5",
 ]
 

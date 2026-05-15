@@ -13,6 +13,7 @@ import sys
 REPO = Path(SPECPATH).resolve().parent
 SRC = REPO / "src"
 RESOURCES = REPO / "installer" / "resources"
+SUPPORT_CONTACT = REPO / "installer" / "support_contact.json"
 
 # Platform-specific OpenGL backend modules. PyInstaller would warn for any
 # missing entries; listing only what the current platform needs avoids noise.
@@ -38,15 +39,24 @@ a = Analysis(
         # Splash image used at runtime via importlib.resources
         (str(RESOURCES / "splash.png"),
          "psf_scan/resources"),
+        *(
+            [(str(SUPPORT_CONTACT), ".")]
+            if SUPPORT_CONTACT.exists()
+            else []
+        ),
     ],
     hiddenimports=[
         "pyqtgraph",
+        "pyqtgraph.exporters",
         "pyqtgraph.opengl",
         "h5py.defs",
         "h5py.utils",
         "h5py._proxy",
         "tifffile",
         "matplotlib.backends.backend_qtagg",
+        "pipython",
+        "pipython.pidevice",
+        "pipython.pidevice.interfaces.gcsdll",
         "serial",
         "serial.tools.list_ports",
         "serial.tools.list_ports_windows",
