@@ -57,8 +57,8 @@ def enumerate_usb_controllers(controller_mask: str = "C-863") -> list[str]:
     except ImportError:
         return []
     try:
-        dev = GCSDevice(controller_mask)
-        return list(dev.EnumerateUSB(mask=controller_mask) or [])
+        with GCSDevice(controller_mask) as dev:
+            return list(dev.EnumerateUSB(mask=controller_mask) or [])
     except Exception:  # noqa: BLE001
         return []
 
@@ -75,16 +75,16 @@ def scan_rs232_daisy(controller: str, comport, baudrate: int = 115200) -> list[s
         raise RuntimeError(f"未安装 pipython: {exc}") from exc
 
     from ..drivers import pi_link
-    dev = GCSDevice(controller)
     import sys
 
-    if sys.platform in ("linux", "linux2"):
-        sp = comport if isinstance(comport, str) and comport else ""
-        items = pi_link.scan_rs232_daisy(dev, baudrate=int(baudrate), serialport=sp)
-    else:
-        c = int(comport) if comport else 0
-        items = pi_link.scan_rs232_daisy(dev, comport=c, baudrate=int(baudrate))
-    return items
+    with GCSDevice(controller) as dev:
+        if sys.platform in ("linux", "linux2"):
+            sp = comport if isinstance(comport, str) and comport else ""
+            items = pi_link.scan_rs232_daisy(dev, baudrate=int(baudrate), serialport=sp)
+        else:
+            c = int(comport) if comport else 0
+            items = pi_link.scan_rs232_daisy(dev, comport=c, baudrate=int(baudrate))
+        return items
 
 
 def _parse_com_num(name: str) -> Optional[int]:
