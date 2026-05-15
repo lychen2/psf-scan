@@ -9,11 +9,13 @@ Outputs:
 """
 from pathlib import Path
 import sys
+from PyInstaller.utils.hooks import collect_data_files
 
 REPO = Path(SPECPATH).resolve().parent
 SRC = REPO / "src"
 RESOURCES = REPO / "installer" / "resources"
 SUPPORT_CONTACT = REPO / "installer" / "support_contact.json"
+PIPYTHON_DATAS = collect_data_files("pipython")
 
 # Platform-specific OpenGL backend modules. PyInstaller would warn for any
 # missing entries; listing only what the current platform needs avoids noise.
@@ -44,6 +46,7 @@ a = Analysis(
             if SUPPORT_CONTACT.exists()
             else []
         ),
+        *PIPYTHON_DATAS,
     ],
     hiddenimports=[
         "pyqtgraph",

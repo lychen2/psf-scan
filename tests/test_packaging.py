@@ -17,6 +17,7 @@ def test_pyserial_is_runtime_dependency() -> None:
 
 def test_pyinstaller_includes_pyserial_modules() -> None:
     text = SPEC.read_text(encoding="utf-8")
+    assert 'collect_data_files("pipython")' in text
     assert '"pyqtgraph.exporters"' in text
     assert '"pipython"' in text
     assert '"pipython.pidevice.interfaces.gcsdll"' in text
