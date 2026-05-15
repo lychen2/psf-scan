@@ -9,6 +9,7 @@ from typing import ClassVar, Optional
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
+from .calibration import CalibrationConfig, apply_calibration
 from .camera import CameraBase
 from .stage import StageBase
 
@@ -55,6 +56,17 @@ class ScanParams:
         return np.array(pts, dtype=np.float64)
 
 
+@dataclass
+class ScanMetadata:
+    """Optional user-provided metadata stored with scan artifacts."""
+
+    sample_name: str = ""
+    objective: str = ""
+    na: float | None = None
+    wavelength_nm: float | None = None
+    note: str = ""
+
+
 def _linspace(start, stop, step) -> np.ndarray:
     if start is None or stop is None or step is None or step == 0:
         return np.array([0.0])
@@ -70,6 +82,10 @@ class ScanResult:
     timestamps: np.ndarray  # (N,)
     started_at: float
     finished_at: float
+    metadata: ScanMetadata | None = None
+    corrected_frames: np.ndarray | None = None
+    calibration: dict | None = None
+    pixel_calibration: dict | None = None
 
 
 class ScanCanceled(Exception):
@@ -90,10 +106,15 @@ class Scanner(QObject):
         self._stage = stage
         self._camera = camera
         self._params: Optional[ScanParams] = None
+        self._calibration: CalibrationConfig | None = None
         self._cancel = False
+        self._writer = None  # StreamingScanWriter | None (duck-typed: 仅需 append/count)
 
-    def configure(self, params: ScanParams) -> None:
+    def configure(self, params: ScanParams, writer=None,
+                  calibration: CalibrationConfig | None = None) -> None:
         self._params = params
+        self._writer = writer
+        self._calibration = calibration
 
     def cancel(self) -> None:
         """跨线程调用安全：bool 赋值原子。"""
@@ -108,6 +129,7 @@ class Scanner(QObject):
             t0 = time.time()
             pts = self._params.points()
             frames: list[np.ndarray] = []
+            corrected_frames: list[np.ndarray] = []
             ts: list[float] = []
             try:
                 for idx, (x, y, z) in enumerate(pts):
@@ -120,11 +142,27 @@ class Scanner(QObject):
                         self.error.emit("移动超时")
                         return
                     frame = self._acquire_average_frame()
+                    corrected = self._correct_frame(frame)
                     t = time.time() - t0
                     frames.append(frame)
+                    if corrected is not None:
+                        corrected_frames.append(corrected)
                     ts.append(t)
+                    # streaming: 边采边写 stack.h5, 中途崩溃已写帧保留 (C.4)
+                    if self._writer is not None:
+                        try:
+                            self._writer.append(
+                                idx, float(x), float(y), float(z), frame, t,
+                                corrected=corrected,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            self.error.emit(f"流式写盘失败: {exc}")
+                            return
                     self.progress.emit(idx + 1, len(pts), float(x), float(y), float(z))
-                    self.frame_acquired.emit(idx, float(x), float(y), float(z), frame)
+                    self.frame_acquired.emit(
+                        idx, float(x), float(y), float(z),
+                        corrected if corrected is not None else frame,
+                    )
             except ScanCanceled:
                 pass
 
@@ -135,6 +173,7 @@ class Scanner(QObject):
                 self.error.emit("未采集到任何帧")
                 return
             stack = np.stack(frames)
+            corrected_stack = np.stack(corrected_frames) if corrected_frames else None
             result = ScanResult(
                 params=self._params,
                 positions=pts[: len(frames)],
@@ -142,6 +181,8 @@ class Scanner(QObject):
                 timestamps=np.array(ts),
                 started_at=t0,
                 finished_at=time.time(),
+                corrected_frames=corrected_stack,
+                calibration=None if self._calibration is None else self._calibration.metadata(),
             )
             if self._cancel:
                 self.finished.emit(result)
@@ -201,6 +242,11 @@ class Scanner(QObject):
         if accumulator is None:
             raise RuntimeError("未采集到平均帧样本")
         return accumulator / float(sample_count)
+
+    def _correct_frame(self, frame: np.ndarray) -> np.ndarray | None:
+        if self._calibration is None or not self._calibration.enabled:
+            return None
+        return apply_calibration(frame, self._calibration).astype(np.float32, copy=False)
 
     def _sleep_until(self, deadline: float) -> None:
         while not self._cancel:

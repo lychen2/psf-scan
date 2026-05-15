@@ -1,11 +1,28 @@
-"""XYZ cut sliders for PSF volume rendering."""
+"""XYZ cut sliders for PSF volume rendering — slider + spinbox per axis."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QHBoxLayout, QSlider, QWidget
+from typing import Callable
 
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QHBoxLayout, QSlider, QSpinBox, QWidget
+
+from ..core.i18n import tr
 from .widgets import HintLabel
+
+
+def _link_pair(slider: QSlider, spin: QSpinBox, on_change: Callable[[], None]) -> None:
+    """Bi-directional sync between a slider and a spin box. Each user edit fires ``on_change`` exactly once."""
+    def from_slider(v: int) -> None:
+        spin.blockSignals(True); spin.setValue(v); spin.blockSignals(False)
+        on_change()
+
+    def from_spin(v: int) -> None:
+        slider.blockSignals(True); slider.setValue(v); slider.blockSignals(False)
+        on_change()
+
+    slider.valueChanged.connect(from_slider)
+    spin.valueChanged.connect(from_spin)
 
 
 class VolumeCutControls(QWidget):
@@ -13,51 +30,77 @@ class VolumeCutControls(QWidget):
 
     def __init__(self) -> None:
         super().__init__()
-        self._x = _slider()
-        self._y = _slider()
-        self._z = _slider()
+        self._x_slider = QSlider(Qt.Horizontal)
+        self._x_spin = QSpinBox()
+        self._y_slider = QSlider(Qt.Horizontal)
+        self._y_spin = QSpinBox()
+        self._z_slider = QSlider(Qt.Horizontal)
+        self._z_spin = QSpinBox()
+        for ss in (self._x_slider, self._y_slider, self._z_slider):
+            ss.setEnabled(False)
+        for sb in (self._x_spin, self._y_spin, self._z_spin):
+            sb.setEnabled(False)
+            sb.setButtonSymbols(QSpinBox.NoButtons)
+            sb.setMaximumWidth(60)
+        for slider, spin in self._pairs():
+            _link_pair(slider, spin, self.changed.emit)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-        for label, slider in (("x cut", self._x), ("y cut", self._y), ("z cut", self._z)):
+        for label, slider, spin in (
+            (tr("psf.x_cut"), self._x_slider, self._x_spin),
+            (tr("psf.y_cut"), self._y_slider, self._y_spin),
+            (tr("psf.z_cut"), self._z_slider, self._z_spin),
+        ):
             layout.addWidget(HintLabel(label))
             layout.addWidget(slider, stretch=1)
-            slider.valueChanged.connect(self.changed)
+            layout.addWidget(spin)
+
+    def _pairs(self) -> tuple[tuple[QSlider, QSpinBox], ...]:
+        return (
+            (self._x_slider, self._x_spin),
+            (self._y_slider, self._y_spin),
+            (self._z_slider, self._z_spin),
+        )
 
     def set_shape(self, shape: tuple[int, int, int]) -> None:
         depth, height, width = shape
-        for slider, maximum in ((self._x, width - 1), (self._y, height - 1), (self._z, depth - 1)):
-            slider.blockSignals(True)
-            slider.setRange(0, maximum)
-            slider.setEnabled(maximum > 0)
-            slider.blockSignals(False)
+        for slider, spin, maximum in (
+            (self._x_slider, self._x_spin, width - 1),
+            (self._y_slider, self._y_spin, height - 1),
+            (self._z_slider, self._z_spin, depth - 1),
+        ):
+            for w in (slider, spin):
+                w.blockSignals(True)
+                w.setRange(0, maximum)
+                w.setEnabled(maximum > 0)
+                w.blockSignals(False)
 
     def set_values(self, x: int, y: int, z: int) -> None:
-        for slider, value in ((self._x, x), (self._y, y), (self._z, z)):
-            slider.blockSignals(True)
-            slider.setValue(int(value))
-            slider.blockSignals(False)
+        for slider, spin, value in (
+            (self._x_slider, self._x_spin, x),
+            (self._y_slider, self._y_spin, y),
+            (self._z_slider, self._z_spin, z),
+        ):
+            for w in (slider, spin):
+                w.blockSignals(True)
+                w.setValue(int(value))
+                w.blockSignals(False)
 
     def maxima(self) -> tuple[int, int, int]:
-        return (self._x.maximum(), self._y.maximum(), self._z.maximum())
+        return (self._x_slider.maximum(), self._y_slider.maximum(), self._z_slider.maximum())
 
     def ratios(self) -> tuple[float, float, float]:
         return tuple(
             slider.value() / max(1, slider.maximum())
-            for slider in (self._x, self._y, self._z)
+            for slider in (self._x_slider, self._y_slider, self._z_slider)
         )
 
     def x_value(self) -> int:
-        return self._x.value()
+        return self._x_slider.value()
 
     def y_value(self) -> int:
-        return self._y.value()
+        return self._y_slider.value()
 
     def z_value(self) -> int:
-        return self._z.value()
-
-
-def _slider() -> QSlider:
-    slider = QSlider(Qt.Horizontal)
-    slider.setEnabled(False)
-    return slider
+        return self._z_slider.value()

@@ -24,23 +24,25 @@ class PsfPlotWidget(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._images = ImageSurface()
-        self._volume = VolumeSurface()
+        self._volume: VolumeSurface | None = None
         self._stack = QStackedLayout(self)
         self._stack.setContentsMargins(0, 0, 0, 0)
         self._stack.addWidget(self._images)
-        self._stack.addWidget(self._volume)
 
     def clear(self) -> None:
         self._images.clear()
-        self._volume.clear()
+        if self._volume is not None:
+            self._volume.clear()
 
     def set_rect_zoom_mode(self, on: bool) -> None:
         self._images.set_rect_zoom_mode(on)
-        self._volume.set_rect_zoom_mode(on)
+        if self._volume is not None:
+            self._volume.set_rect_zoom_mode(on)
 
     def reset_views(self) -> None:
         self._images.reset_views()
-        self._volume.reset_view()
+        if self._volume is not None:
+            self._volume.reset_view()
 
     def set_images(
         self,
@@ -62,8 +64,9 @@ class PsfPlotWidget(QWidget):
         z_positions: np.ndarray | None,
         live: bool = False,
     ) -> None:
-        self._stack.setCurrentWidget(self._volume)
-        self._volume.set_volume(
+        volume_surface = self._ensure_volume_surface()
+        self._stack.setCurrentWidget(volume_surface)
+        volume_surface.set_volume(
             volume,
             levels=levels,
             options=options,
@@ -75,11 +78,17 @@ class PsfPlotWidget(QWidget):
         """统一导出当前 plot — 2D 走 pyqtgraph exporter，3D 走 framebuffer。"""
         from pathlib import Path as _Path
         target = str(_Path(path))
-        if self._stack.currentWidget() is self._volume:
+        if self._volume is not None and self._stack.currentWidget() is self._volume:
             self._volume.export_to(target)
         else:
             from pyqtgraph.exporters import ImageExporter
             ImageExporter(self._images.scene()).export(target)
+
+    def _ensure_volume_surface(self) -> VolumeSurface:
+        if self._volume is None:
+            self._volume = VolumeSurface()
+            self._stack.addWidget(self._volume)
+        return self._volume
 
 
 class ImageSurface(pg.GraphicsLayoutWidget):
@@ -87,10 +96,15 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         super().__init__()
         self.setBackground(PLOT_BG)
         self._plots: dict[int, object] = {}
+        self._items: dict[int, pg.ImageItem] = {}
+        self._locator_items: dict[int, list] = {}
         self._rects: dict[int, tuple[float, float, float, float]] = {}
         self._locators: list[object] = []
         self._fade_step = 0
         self._rect_zoom = False
+        self._last_mode = None
+        self._last_show_colorbar = False
+        self._last_show_labels = False
         self._fade = QTimer(self)
         self._fade.setInterval(LOCATOR_FADE_INTERVAL_MS)
         self._fade.timeout.connect(self._fade_locators)
@@ -103,10 +117,29 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         levels: tuple[float, float],
         options: RenderOptions,
     ) -> None:
+        cmap = resolve_or_default(cmap_name)
+        # 复用条件: plot 数量/模式/可见性都不变 — 仅 cut 位置变化时, 避免 rebuild 抖动
+        can_reuse = (
+            len(self._plots) == len(images) and len(images) > 0
+            and self._last_mode == options.mode
+            and self._last_show_colorbar == options.show_colorbar
+            and self._last_show_labels == options.show_labels
+        )
+        if can_reuse:
+            self._update_images(images, levels, cmap, options)
+        else:
+            self._rebuild_images(images, levels, cmap, options)
+        self._last_mode = options.mode
+        self._last_show_colorbar = options.show_colorbar
+        self._last_show_labels = options.show_labels
+        self._start_locator_fade()
+
+    def _rebuild_images(self, images, levels, cmap, options) -> None:
         ranges = _view_ranges(self._plots)
         rects = self._rects.copy()
         self._clear_items(clear_rects=False)
-        cmap = resolve_or_default(cmap_name)
+        self._items = {}
+        self._locator_items = {}
         for index, image in enumerate(images):
             plot = self.addPlot(row=0, col=index * 2)
             item = pg.ImageItem(image.image.T)
@@ -117,12 +150,37 @@ class ImageSurface(pg.GraphicsLayoutWidget):
             _configure_plot(plot, image, options)
             _restore_range(plot, ranges.get(index), rects.get(index), image.rect)
             self._plots[index] = plot
+            self._items[index] = item
             self._rects[index] = image.rect
+            self._locator_items[index] = [
+                i for i in plot.items if i.property("role") == "locator"
+            ]
             if self._rect_zoom:
                 plot.getViewBox().setMouseMode(pg.ViewBox.RectMode)
             if options.show_colorbar:
                 _add_colorbar(self, col=index * 2 + 1, item=item, cmap=cmap, levels=levels)
-        self._start_locator_fade()
+
+    def _update_images(self, images, levels, cmap, options) -> None:
+        """复用现有 plot/ImageItem, 仅 setImage 数据 — 避免 GraphicsLayout rebuild 抖动。"""
+        for index, image in enumerate(images):
+            item = self._items[index]
+            item.setImage(image.image.T, autoLevels=False)
+            item.setLevels(levels)
+            item.setLookupTable(cmap.getLookupTable())
+            item.setRect(*image.rect)
+            plot = self._plots[index]
+            plot.setTitle(image.title, color=PLOT_TITLE, size="10pt")
+            # 清旧 locator + 加新
+            for loc in self._locator_items.get(index, []):
+                try: plot.removeItem(loc)
+                except Exception: pass  # noqa: BLE001
+            self._locator_items[index] = []
+            if options.show_locator and image.locator is not None:
+                _add_locator(plot, image.locator)
+                self._locator_items[index] = [
+                    i for i in plot.items if i.property("role") == "locator"
+                ]
+            self._rects[index] = image.rect
 
     def clear(self) -> None:
         self._clear_items(clear_rects=True)
@@ -146,6 +204,9 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         self._fade.stop()
         self._locators = []
         self._plots = {}
+        self._items = {}
+        self._locator_items = {}
+        self._last_mode = None
         if clear_rects:
             self._rects = {}
         self.ci.clear()

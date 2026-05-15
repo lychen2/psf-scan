@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QToolButton, QWidget
 
+from ..core.i18n import tr
 from . import theme
 from .motion import StatusDot
 from .widgets import HintLabel, ValueLabel
@@ -32,6 +33,7 @@ STATUS_ROW_GAP = 8
 class StatusStrip(QWidget):
     change_data_dir_requested = Signal()
     open_data_dir_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -60,15 +62,29 @@ class StatusStrip(QWidget):
             row.addWidget(widget)
             row.addWidget(_vrule())
         row.addStretch()
-        row.addWidget(HintLabel("data"))
+        row.addWidget(HintLabel(tr("status.data")))
         row.addWidget(self._data_dir)
-        self._btn_open = _link_button("open")
+        self._btn_open = _link_button(tr("status.open"))
+        self._btn_open.setToolTip(tr("tip.data_dir_open"))
         self._btn_open.clicked.connect(self.open_data_dir_requested.emit)
-        self._btn_change = _link_button("change…")
+        self._btn_change = _link_button(tr("status.change"))
+        self._btn_change.setToolTip(tr("tip.data_dir_change"))
         self._btn_change.clicked.connect(self.change_data_dir_requested.emit)
         row.addWidget(self._btn_open)
         row.addWidget(self._btn_change)
-        self.set_state(STATE_IDLE, "offline")
+        # 齿轮按钮 — 打开统一设置
+        self._btn_settings = QToolButton()
+        self._btn_settings.setText("⚙")
+        self._btn_settings.setToolTip(tr("tip.settings"))
+        self._btn_settings.setCursor(Qt.PointingHandCursor)
+        self._btn_settings.setStyleSheet(
+            f"QToolButton{{color:{theme.TEXT2};border:none;background:transparent;"
+            "padding:0 6px;font-size:16px;}"
+            f"QToolButton:hover{{color:{theme.ACCENT};}}"
+        )
+        self._btn_settings.clicked.connect(self.settings_requested.emit)
+        row.addWidget(self._btn_settings)
+        self.set_state(STATE_IDLE, tr("status.offline"))
 
     def set_state(self, state: str, text: str) -> None:
         color = STATE_COLORS.get(state, theme.BORDER1)
@@ -115,10 +131,10 @@ class StatusStrip(QWidget):
     def _items(self) -> tuple[tuple[str, QWidget], ...]:
         state = _with_dot(self._dot, self._state)
         return (
-            ("state", state),
-            ("pos", self._position),
-            ("run", self._progress),
-            ("cam", self._camera),
+            (tr("status.state"), state),
+            (tr("status.position"), self._position),
+            (tr("status.run"), self._progress),
+            (tr("status.camera"), self._camera),
         )
 
 

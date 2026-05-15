@@ -6,6 +6,7 @@ import numpy as np
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
+from ..core.i18n import tr
 from . import theme
 from .psf_control_panel import PsfControlPanel
 from .psf_plot import PsfPlotWidget
@@ -60,7 +61,7 @@ class PSFView(QWidget):
         self._volume = None
         self._render_pending = False
         self._plot.clear()
-        self._set_empty("scanning · waiting for averaged frames")
+        self._set_empty(tr("scan.scanning_status"))
 
     def add_frame(self, idx: int, frame: np.ndarray) -> None:
         if idx != self._frame_count:
@@ -115,7 +116,7 @@ class PSFView(QWidget):
             self._render_plot(levels, options)
             self._update_info()
         except Exception as exc:  # noqa: BLE001
-            self._controls.set_empty(f"plot error: {exc}")
+            self._controls.set_empty(tr("psf.plot_error", exc=exc))
 
     def _options(self) -> RenderOptions:
         return self._controls.selected_options()

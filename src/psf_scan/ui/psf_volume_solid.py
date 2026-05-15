@@ -53,7 +53,7 @@ def solid_slice_layers(
     norm_flat = selection.norm[keep].astype(np.float32, copy=False)
     alpha_flat = selection.alpha[keep].astype(np.float32, copy=False)
     colors = _rgba_values(norm_flat, alpha_flat, options.volume_cmap)
-    emission_colors = _emission_values(colors)
+    emission_colors = _emission_values(colors, options.volume_brightness)
     transmission_colors = _transmission_values(colors)
     centers = display_points(
         x_flat,
@@ -97,9 +97,10 @@ def _transmission_values(colors: np.ndarray) -> np.ndarray:
     return np.concatenate((transmission_rgb, transmission_alpha), axis=1).astype(np.float32, copy=False)
 
 
-def _emission_values(colors: np.ndarray) -> np.ndarray:
-    rgb = np.minimum(colors[:, :3], EMISSION_RGB_CEILING)
-    alpha = np.clip(colors[:, 3:4] * EMISSION_ALPHA_SCALE, 0.0, 1.0)
+def _emission_values(colors: np.ndarray, brightness: float) -> np.ndarray:
+    strength = max(0.0, float(brightness))
+    rgb = np.minimum(colors[:, :3] * strength, EMISSION_RGB_CEILING)
+    alpha = np.clip(colors[:, 3:4] * EMISSION_ALPHA_SCALE * strength, 0.0, 1.0)
     return np.concatenate((rgb, alpha), axis=1).astype(np.float32, copy=False)
 
 

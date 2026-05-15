@@ -17,6 +17,7 @@ VOLUME_DEPTH_FLOOR = 0.45
 DEFAULT_THRESHOLD = 0.30
 MIN_THRESHOLD = 0.01
 DEFAULT_VOLUME_ALPHA = 1.0
+DEFAULT_VOLUME_BRIGHTNESS = 1.0
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,7 @@ class RenderOptions:
     volume_detail: str = "fast"  # "fast" | "fine"
     volume_style: str = VOLUME_STYLE_SURFACE
     volume_alpha: float = DEFAULT_VOLUME_ALPHA
+    volume_brightness: float = DEFAULT_VOLUME_BRIGHTNESS
     volume_cmap: str = "viridis"
     volume_cut_x: int = 0
     volume_cut_y: int = 0

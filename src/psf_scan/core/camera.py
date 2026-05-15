@@ -88,7 +88,7 @@ class CameraBase(QObject):
     def pixel_formats(self) -> tuple[str, ...]: return ()
 
 
-AVAILABLE_CAMERAS = ["mock", "mvs"]
+AVAILABLE_CAMERAS = ["mvs", "mock", "mock-interference"]
 
 
 def make_camera(kind: str, **kwargs) -> CameraBase:
@@ -98,6 +98,10 @@ def make_camera(kind: str, **kwargs) -> CameraBase:
         from ..drivers.camera_mock import MockCamera
 
         return MockCamera(**kwargs)
+    if kind == "mock-interference":
+        from ..drivers.camera_mock import MOCK_MODE_INTERFERENCE, MockCamera
+
+        return MockCamera(mode=MOCK_MODE_INTERFERENCE, **kwargs)
     if kind == "mvs":
         from ..drivers.camera_mvs import MVSCamera
 

@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import datetime as _dt
 import json
+import logging
+import logging.handlers
 import os
 import sys
 import traceback
@@ -127,3 +129,64 @@ def install_excepthook(*, gui: bool = True) -> None:
         sys.__excepthook__(exc_type, exc_value, exc_tb)
 
     sys.excepthook = _hook
+
+
+_LOG_FORMAT = "%(asctime)s %(levelname)-7s %(name)s: %(message)s"
+_LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+
+def install_logging() -> Path:
+    """初始化全局日志:rotating 文件 + stderr。返回主日志文件路径。
+
+    所有 ``logging.getLogger(__name__)`` 拿到的 logger 会写到
+    ``<log_directory()>/psf_scan.log`` (5MB × 5 份滚动),同时
+    把 INFO+ 拷一份到 stderr。Qt 自己的 ``qDebug/qWarning`` 也通过
+    ``qInstallMessageHandler`` 接进来。
+    """
+    log_path = log_directory() / "psf_scan.log"
+    root = logging.getLogger()
+    root.setLevel(logging.DEBUG)
+    if any(getattr(h, "_psf_scan", False) for h in root.handlers):
+        return log_path
+    fh = logging.handlers.RotatingFileHandler(
+        log_path, maxBytes=5_000_000, backupCount=5, encoding="utf-8"
+    )
+    fh._psf_scan = True  # type: ignore[attr-defined]
+    fh.setLevel(logging.DEBUG)
+    fh.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT))
+    root.addHandler(fh)
+    sh = logging.StreamHandler()
+    sh._psf_scan = True  # type: ignore[attr-defined]
+    sh.setLevel(logging.INFO)
+    sh.setFormatter(logging.Formatter("%(levelname)-7s %(name)s: %(message)s"))
+    root.addHandler(sh)
+    # 三方库噪声太多 — 提升到 WARNING (psf_scan 自己仍保留 DEBUG)
+    for name in ("OpenGL", "matplotlib", "PIL", "fontTools"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    logging.getLogger("psf_scan").info("logging initialized → %s", log_path)
+    return log_path
+
+
+def install_qt_message_handler() -> None:
+    """把 Qt 自己的 qDebug/qWarning/qCritical 转给 ``logging``。
+
+    QApplication 还没建之前调没意义,所以单独拆出来,由 main 在
+    QApplication() 之后立即调。
+    """
+    try:
+        from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+    except ImportError:
+        return
+    qt_log = logging.getLogger("Qt")
+    level_map = {
+        QtMsgType.QtDebugMsg: logging.DEBUG,
+        QtMsgType.QtInfoMsg: logging.INFO,
+        QtMsgType.QtWarningMsg: logging.WARNING,
+        QtMsgType.QtCriticalMsg: logging.ERROR,
+        QtMsgType.QtFatalMsg: logging.CRITICAL,
+    }
+
+    def _handler(mode, ctx, message):
+        qt_log.log(level_map.get(mode, logging.INFO), "%s", message)
+
+    qInstallMessageHandler(_handler)

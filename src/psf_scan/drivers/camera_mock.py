@@ -16,6 +16,19 @@ from PySide6.QtCore import QTimer, Slot
 from ..core.camera import CameraBase
 from ..core.stage import StageBase
 from ._psf_optics import PRESETS, PsfModel, random_preset
+from .mock_interference import (
+    MODE_OFFAXIS_REFERENCE,
+    MODE_OFFAXIS_SAMPLE,
+    MODE_SAMPLE,
+    PHASE_CAMERA_MODES,
+    render_interferogram,
+)
+
+MOCK_MODE_PSF = "PSF"
+MOCK_MODE_SAMPLE = MODE_SAMPLE
+MOCK_MODE_INTERFERENCE = MODE_OFFAXIS_SAMPLE
+MOCK_MODE_REFERENCE = MODE_OFFAXIS_REFERENCE
+MOCK_MODES = (MOCK_MODE_PSF, *PHASE_CAMERA_MODES)
 
 
 class MockCamera(CameraBase):
@@ -33,6 +46,7 @@ class MockCamera(CameraBase):
         preset: Optional[str] = None,
         z_focus_um: Optional[float] = None,
         xy_offset_um: Optional[tuple[float, float]] = None,
+        mode: str = MOCK_MODE_PSF,
     ) -> None:
         super().__init__()
         self._w = int(width)
@@ -51,6 +65,7 @@ class MockCamera(CameraBase):
         self._connected = False
         self._streaming = False
         self._rng = np.random.default_rng()
+        self._mode = mode if mode in MOCK_MODES else MOCK_MODE_PSF
 
         N = max(self._w, self._h)
         # N // 14 → 7× 零填充 → 焦面像元 ≈ λ/(14·NA)，配合 NA=0.45 视觉上 FWHM ~ 8 px
@@ -96,6 +111,8 @@ class MockCamera(CameraBase):
 
     @property
     def description(self) -> str:
+        if self._mode != MOCK_MODE_PSF:
+            return f"mock · {self._mode}"
         return (
             f"mock · pupil={self._preset_name} · "
             f"focus@({self._xy_offset[0]:+.1f},{self._xy_offset[1]:+.1f},{self._z_focus:+.2f})µm"
@@ -174,17 +191,28 @@ class MockCamera(CameraBase):
         return (1.0, 120.0)
 
     def pixel_formats(self) -> tuple[str, ...]:
-        return ("Mono8",) if self.bit_depth() == 8 else ("Mono8", "Mono16")
+        return MOCK_MODES
 
     def get_pixel_format(self) -> str | None:
-        return "Mono8" if self.bit_depth() == 8 else "Mono16"
+        return self._mode
+
+    def set_pixel_format(self, fmt: str) -> None:
+        if fmt not in MOCK_MODES:
+            self.error.emit(f"mock 不支持模式: {fmt}")
+            return
+        self._mode = fmt
 
     @Slot()
     def _produce_frame(self) -> None:
         self.frame_ready.emit(self._render(), time.time())
 
     def _render(self) -> np.ndarray:
-        x, y, z = self._stage.position if self._stage else (0.0, 0.0, 0.0)
+        if self._mode != MOCK_MODE_PSF:
+            return self._render_interference()
+        return self._render_psf()
+
+    def _render_psf(self) -> np.ndarray:
+        x, y, z = self._stage.raw_position if self._stage else (0.0, 0.0, 0.0)
         psf = self._psf.render(z_um=z, x_um=x, y_um=y)
         # 裁到相机尺寸 (PSF FFT 网格 N×N，相机 H×W ≤ N)
         N = psf.shape[0]
@@ -199,3 +227,19 @@ class MockCamera(CameraBase):
         if self._gamma != 1.0:
             noisy = np.power(np.clip(noisy / self._max_val, 0.0, 1.0), 1.0 / self._gamma) * self._max_val
         return np.clip(noisy, 0, self._max_val).astype(self._dtype)
+
+    def _render_interference(self) -> np.ndarray:
+        position = self._stage.raw_position if self._stage else (0.0, 0.0, 0.0)
+        return render_interferogram(
+            mode=self._mode,
+            width=self._w,
+            height=self._h,
+            max_val=self._max_val,
+            exposure_us=self._exposure_us,
+            gain=self._gain,
+            black_level=self._black_level,
+            gamma=self._gamma,
+            rng=self._rng,
+            position=position,
+            dtype=self._dtype,
+        )

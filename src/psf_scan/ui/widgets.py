@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QWidget
 
 
 class SectionHeader(QWidget):
@@ -46,3 +46,33 @@ class MeterLabel(QLabel):
     def __init__(self, text: str = "", parent=None) -> None:
         super().__init__(text, parent)
         self.setProperty("role", "meter")
+
+
+def fixed_combo(items: tuple[str, ...], current: str) -> QComboBox:
+    """非编辑 combo, 选中 current (大小写不敏感)。"""
+    cb = QComboBox()
+    cb.addItems(items)
+    ix = cb.findText(current, Qt.MatchFixedString)
+    cb.setCurrentIndex(max(0, ix))
+    return cb
+
+
+def editable_combo(items: tuple[str, ...], current: str) -> QComboBox:
+    """可编辑 combo, 预填 items 但允许用户输入。"""
+    cb = QComboBox()
+    cb.setEditable(True)
+    cb.addItems(items)
+    cb.setCurrentText(current or items[0])
+    return cb
+
+
+def double_spin(value, lo, hi, dec, suffix, special: str = "") -> QDoubleSpinBox:
+    """带后缀/特殊文本的小数 spin。"""
+    sp = QDoubleSpinBox()
+    sp.setRange(lo, hi)
+    sp.setDecimals(dec)
+    sp.setSuffix(suffix)
+    if special:
+        sp.setSpecialValueText(special)
+    sp.setValue(float(value or 0.0))
+    return sp

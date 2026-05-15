@@ -5,23 +5,60 @@ from __future__ import annotations
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
+from ..core.i18n import tr
 from . import theme
 from .control_panel_helpers import button as _btn
 from . import psf_preset
 from .psf_cut_controls import VolumeCutControls
 from .psf_render import (
-    DEFAULT_THRESHOLD, DEFAULT_VOLUME_ALPHA, MIN_THRESHOLD, MODE_MIP, MODE_ORTHO,
-    MODE_VOLUME, RenderOptions, VOLUME_STYLE_SLICES, VOLUME_STYLE_SURFACE,
+    DEFAULT_THRESHOLD, DEFAULT_VOLUME_ALPHA, DEFAULT_VOLUME_BRIGHTNESS,
+    MIN_THRESHOLD, MODE_MIP, MODE_ORTHO, MODE_VOLUME, RenderOptions,
+    VOLUME_STYLE_SLICES, VOLUME_STYLE_SURFACE,
 )
 from .psf_view_controls import check, combo, dspin, ispin, set_visible
 from .settings import UserSettings
+from .spin_slider import SpinSliderDouble, SpinSliderInt
 from .widgets import HintLabel, MeterLabel, SectionHeader, ValueLabel
 
 CMAPS = ("viridis", "gray", "hot", "rainbow", "magma", "inferno", "plasma", "CET-L4")
 VOLUME_LAYER_MAX = 12
 DEFAULT_VOLUME_LAYERS = 3
+
+
+def _empty_html(text: str, hint: str | None) -> str:
+    """主行 + 浅色提示行 (None 时退化为单行)。"""
+    if not hint:
+        return text
+    return (
+        f"<div>{text}</div>"
+        f"<div style='color:{theme.TEXT3};font-size:10px;"
+        "margin-top:6px;font-weight:400;letter-spacing:0px;'>"
+        f"{hint}</div>"
+    )
+
+
+def _ss_double(value: float, lo: float, hi: float, *, step: float, decimals: int, width: int) -> SpinSliderDouble:
+    ss = SpinSliderDouble()
+    ss.setRange(lo, hi)
+    ss.setDecimals(decimals)
+    ss.setSingleStep(step)
+    ss.setValue(value)
+    ss.setMinimumWidth(width)
+    ss.spin.setMinimumWidth(max(54, width // 2 + 8))
+    return ss
+
+
+def _ss_int(value: int, lo: int, hi: int, *, width: int) -> SpinSliderInt:
+    ss = SpinSliderInt()
+    ss.setRange(lo, hi)
+    ss.setValue(value)
+    ss.setMinimumWidth(width)
+    ss.spin.setMinimumWidth(max(48, width // 2 + 8))
+    return ss
 VOLUME_ALPHA_MIN = 0.05
 VOLUME_ALPHA_MAX = 1.0
+VOLUME_BRIGHTNESS_MIN = 0.0
+VOLUME_BRIGHTNESS_MAX = 2.0
 FINE_INTERP_MIN = 1.0
 FINE_INTERP_MAX = 4.0
 DETAIL_ROW_INDENT = 88
@@ -66,9 +103,10 @@ class PsfControlPanel(QWidget):
             show_locator=self.locator.isChecked(),
             volume_threshold=self.threshold.value(),
             volume_step=self.layers.value(),
-            volume_detail=self.detail.currentText(),
+            volume_detail=self._detail_value(),
             volume_style=self.volume_style.currentText(),
             volume_alpha=self.alpha.value(),
+            volume_brightness=self.brightness.value(),
             volume_cmap=self.cmap.currentText(),
             volume_cut_x=self.cuts.x_value(),
             volume_cut_y=self.cuts.y_value(),
@@ -99,11 +137,11 @@ class PsfControlPanel(QWidget):
         self.pos_label.setText(position)
         self.status_label.setText(status)
 
-    def set_empty(self, text: str) -> None:
+    def set_empty(self, text: str, hint: str | None = None) -> None:
         self.idx_label.setText("─ / ─")
         self.pos_label.setText("")
         self.peak_label.setText("")
-        self.status_label.setText(text)
+        self.status_label.setText(_empty_html(text, hint))
 
     def bind_settings(self, settings: UserSettings) -> None:
         """PSF 视图不再自动持久化任何参数；改用 save/load preset 按钮。
@@ -120,9 +158,10 @@ class PsfControlPanel(QWidget):
         ortho = mode == MODE_ORTHO
         self.cuts.setVisible(ortho or (volume and style == VOLUME_STYLE_SLICES))
         set_visible(self._volume_controls(), volume)
-        set_visible(self._fine_controls(), volume and self.detail.currentText() == "fine")
+        set_visible(self._fine_controls(), volume and self.detail.currentIndex() == 1)
         set_visible((self.threshold_lbl, self.threshold), volume and style == VOLUME_STYLE_SURFACE)
         set_visible((self.layers_lbl, self.layers), volume and style == VOLUME_STYLE_SURFACE)
+        set_visible(self._brightness_controls(), volume and style == VOLUME_STYLE_SLICES)
         set_visible(self._image_controls(), not volume)
 
     def _mode_row(self) -> QHBoxLayout:
@@ -147,52 +186,70 @@ class PsfControlPanel(QWidget):
         return row
 
     def _make_controls(self) -> None:
-        self.colorbar = check("colorbar", True)
-        self.auto = check("auto levels", True)
-        self.labels = check("axes", True)
-        self.locator = check("z marker", True)
-        self.rect_zoom = check("rect zoom", False)
-        self.btn_reset = _btn("reset view", enabled=True)
+        self.colorbar = check(tr("psf.colorbar"), True)
+        self.auto = check(tr("psf.auto_levels"), True)
+        self.labels = check(tr("psf.axes"), True)
+        self.locator = check(tr("psf.z_marker"), True)
+        self.rect_zoom = check(tr("psf.rect_zoom"), False)
+        self.btn_reset = _btn(tr("psf.reset_view"), enabled=True)
         self.btn_reset.clicked.connect(self.reset_view_requested.emit)
         self.rect_zoom.toggled.connect(self.rect_zoom_changed.emit)
         self.level_min = dspin(0.0)
         self.level_max = dspin(1.0)
-        self.threshold = dspin(DEFAULT_THRESHOLD, lo=MIN_THRESHOLD, hi=1.0, step=0.01, decimals=3)
-        self.layers = ispin(1, VOLUME_LAYER_MAX, DEFAULT_VOLUME_LAYERS)
-        self.detail = combo(("fast", "fine"), 72)
-        interp_opts = {
-            "lo": FINE_INTERP_MIN,
-            "hi": FINE_INTERP_MAX,
-            "step": 0.25,
-            "decimals": 2,
-            "width": 64,
-        }
-        self.fine_z = dspin(2.0, **interp_opts)
-        self.fine_xy = dspin(2.0, **interp_opts)
-        self.volume_style = combo((VOLUME_STYLE_SURFACE, VOLUME_STYLE_SLICES), 104)
-        self.alpha = dspin(
-            DEFAULT_VOLUME_ALPHA,
-            lo=VOLUME_ALPHA_MIN,
-            hi=VOLUME_ALPHA_MAX,
-            step=0.05,
-            decimals=2,
-            width=62,
+        self.threshold = _ss_double(
+            DEFAULT_THRESHOLD, MIN_THRESHOLD, 1.0, step=0.01, decimals=3, width=96,
         )
+        self.layers = _ss_int(DEFAULT_VOLUME_LAYERS, 1, VOLUME_LAYER_MAX, width=80)
+        self.detail = combo((tr("psf.fast"), tr("psf.fine")), 72)
+        self.fine_z = _ss_double(2.0, FINE_INTERP_MIN, FINE_INTERP_MAX, step=0.25, decimals=2, width=96)
+        self.fine_xy = _ss_double(2.0, FINE_INTERP_MIN, FINE_INTERP_MAX, step=0.25, decimals=2, width=96)
+        self.volume_style = combo((VOLUME_STYLE_SURFACE, VOLUME_STYLE_SLICES), 104)
+        self.alpha = _ss_double(
+            DEFAULT_VOLUME_ALPHA, VOLUME_ALPHA_MIN, VOLUME_ALPHA_MAX,
+            step=0.05, decimals=2, width=96,
+        )
+        self.brightness = SpinSliderDouble()
+        self.brightness.setRange(VOLUME_BRIGHTNESS_MIN, VOLUME_BRIGHTNESS_MAX)
+        self.brightness.setDecimals(2)
+        self.brightness.setSingleStep(0.05)
+        self.brightness.setValue(DEFAULT_VOLUME_BRIGHTNESS)
+        self.brightness.setMinimumWidth(112)
+        self.brightness.spin.setMinimumWidth(62)
+        self._wire_tooltips()
+
+    def _wire_tooltips(self) -> None:
+        self.threshold.setToolTip(tr("tip.psf_threshold"))
+        self.layers.setToolTip(tr("tip.psf_layers"))
+        self.fine_z.setToolTip(tr("tip.psf_fine_z"))
+        self.fine_xy.setToolTip(tr("tip.psf_fine_xy"))
+        self.alpha.setToolTip(tr("tip.psf_alpha"))
+        self.brightness.setToolTip(tr("tip.psf_brightness"))
+        self.level_min.setToolTip(tr("tip.psf_level_min"))
+        self.level_max.setToolTip(tr("tip.psf_level_max"))
+        self.detail.setToolTip(tr("tip.psf_detail"))
+        self.volume_style.setToolTip(tr("tip.psf_volume_style"))
+        self.auto.setToolTip(tr("tip.psf_auto_levels"))
+        self.colorbar.setToolTip(tr("tip.psf_colorbar"))
+        self.labels.setToolTip(tr("tip.psf_axes"))
+        self.locator.setToolTip(tr("tip.psf_z_marker"))
+        self.rect_zoom.setToolTip(tr("tip.psf_rect_zoom"))
+        self.btn_reset.setToolTip(tr("tip.psf_reset_view"))
 
     def _row_widgets(self) -> tuple[QWidget, ...]:
-        self.render_lbl = HintLabel("render")
-        self.cmap_lbl = HintLabel("colormap")
-        self.min_lbl = HintLabel("min")
-        self.max_lbl = HintLabel("max")
-        self.threshold_lbl = HintLabel("threshold")
-        self.layers_lbl = HintLabel("layers")
-        self.detail_lbl = HintLabel("detail")
-        self.fine_z_lbl = HintLabel("z x")
-        self.fine_xy_lbl = HintLabel("xy x")
-        self.volume_lbl = HintLabel("volume")
-        self.alpha_lbl = HintLabel("alpha")
+        self.render_lbl = HintLabel(tr("psf.render"))
+        self.cmap_lbl = HintLabel(tr("psf.colormap"))
+        self.min_lbl = HintLabel(tr("psf.min"))
+        self.max_lbl = HintLabel(tr("psf.max"))
+        self.threshold_lbl = HintLabel(tr("psf.threshold"))
+        self.layers_lbl = HintLabel(tr("psf.layers"))
+        self.detail_lbl = HintLabel(tr("psf.detail"))
+        self.fine_z_lbl = HintLabel(tr("psf.z_interp"))
+        self.fine_xy_lbl = HintLabel(tr("psf.xy_interp"))
+        self.volume_lbl = HintLabel(tr("psf.volume"))
+        self.alpha_lbl = HintLabel(tr("psf.alpha"))
+        self.brightness_lbl = HintLabel(tr("psf.brightness"))
         return (
-            SectionHeader("View"), self.render_lbl, self.mode,
+            SectionHeader(tr("psf.view_section")), self.render_lbl, self.mode,
             self.cmap_lbl, self.cmap, self.colorbar, self.auto,
             self.min_lbl, self.level_min, self.max_lbl, self.level_max,
             self.labels, self.locator,
@@ -205,16 +262,20 @@ class PsfControlPanel(QWidget):
             self.detail_lbl, self.detail, self.fine_z_lbl, self.fine_z,
             self.fine_xy_lbl, self.fine_xy, self.volume_lbl,
             self.volume_style, self.alpha_lbl, self.alpha,
+            self.brightness_lbl, self.brightness,
         )
 
     def _info_row(self) -> QHBoxLayout:
         self.idx_label = MeterLabel("─ / ─")
         self.pos_label = ValueLabel("")
         self.peak_label = MeterLabel("")
-        self.status_label = HintLabel("scan result loads here")
-        self.btn_save_preset = _btn("save…", enabled=True)
-        self.btn_load_preset = _btn("load…", enabled=True)
-        self.btn_export_plot = _btn("export plot…", enabled=True)
+        self.status_label = HintLabel(_empty_html(tr("psf.empty_state"), tr("psf.empty_state_hint")))
+        self.btn_save_preset = _btn(tr("psf.save_preset"), enabled=True)
+        self.btn_load_preset = _btn(tr("psf.load_preset"), enabled=True)
+        self.btn_export_plot = _btn(tr("psf.export_plot"), enabled=True)
+        self.btn_save_preset.setToolTip(tr("tip.psf_save_preset"))
+        self.btn_load_preset.setToolTip(tr("tip.psf_load_preset"))
+        self.btn_export_plot.setToolTip(tr("tip.psf_export_plot"))
         self.btn_save_preset.clicked.connect(lambda: psf_preset.prompt_save(self))
         self.btn_load_preset.clicked.connect(lambda: psf_preset.prompt_load(self))
         self.btn_export_plot.clicked.connect(self.export_plot_requested.emit)
@@ -269,13 +330,17 @@ class PsfControlPanel(QWidget):
     def _emit_render(self, *_: object) -> None:
         self.render_requested.emit()
 
+    def _detail_value(self) -> str:
+        return "fine" if self.detail.currentIndex() == 1 else "fast"
+
     def _render_controls(self) -> tuple:
         return (self.mode, self.detail, self.volume_style)
 
     def _value_controls(self) -> tuple:
         return (
             self.threshold, self.layers, self.fine_z,
-            self.fine_xy, self.alpha, self.level_min, self.level_max,
+            self.fine_xy, self.alpha, self.brightness,
+            self.level_min, self.level_max,
         )
 
     def _volume_controls(self) -> tuple[QWidget, ...]:
@@ -283,10 +348,14 @@ class PsfControlPanel(QWidget):
             self.detail_lbl, self.detail, self.fine_z_lbl, self.fine_z,
             self.fine_xy_lbl, self.fine_xy, self.volume_lbl,
             self.volume_style, self.alpha_lbl, self.alpha,
+            self.brightness_lbl, self.brightness,
         )
 
     def _fine_controls(self) -> tuple[QWidget, ...]:
         return (self.fine_z_lbl, self.fine_z, self.fine_xy_lbl, self.fine_xy)
+
+    def _brightness_controls(self) -> tuple[QWidget, ...]:
+        return (self.brightness_lbl, self.brightness)
 
     def _image_controls(self) -> tuple[QWidget, ...]:
         return (
@@ -319,6 +388,7 @@ class PsfControlPanel(QWidget):
             "fine_z": self.fine_z,
             "fine_xy": self.fine_xy,
             "alpha": self.alpha,
+            "brightness": self.brightness,
         }
 
 

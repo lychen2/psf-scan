@@ -41,6 +41,14 @@ installer/vendored/
 # --- 个人 / 客户联系方式（绝不入库；从 example 复制后本地填值）---
 installer/support_contact.json
 
+# --- 本地用户手册（含联系人信息，不入库；分发时按需打包）---
+docs/manual.tex
+docs/manual.pdf
+docs/manual.aux
+docs/manual.log
+docs/manual.out
+docs/manual.toc
+
 # --- 打包构建产物 ---
 /build/
 /dist/

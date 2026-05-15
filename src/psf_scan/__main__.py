@@ -9,18 +9,29 @@ from __future__ import annotations
 
 import os
 import sys
+import logging
 
 from psf_scan import _bootstrap
 
 
 def main() -> int:
-    # Install crash handler before any heavy imports so even ImportError surfaces nicely.
+    # Install crash handler + logging before any heavy imports so even ImportError
+    # surfaces in the log file and a friendly dialog (once GUI is up).
     _bootstrap.install_excepthook(gui=False)
+    _bootstrap.install_logging()
+    logging.getLogger("psf_scan.startup").info(
+        "startup executable=%s argv=%r package=%s module=%s",
+        sys.executable,
+        sys.argv,
+        __import__("psf_scan").__file__,
+        __file__,
+    )
 
     from PySide6.QtWidgets import QApplication
     app = QApplication(sys.argv)
     # Upgrade hook now that QApplication exists so we can show a dialog on crash.
     _bootstrap.install_excepthook(gui=True)
+    _bootstrap.install_qt_message_handler()
 
     from psf_scan.ui.settings import APP_NAME, ORG_NAME
     from psf_scan.ui.theme import apply_theme

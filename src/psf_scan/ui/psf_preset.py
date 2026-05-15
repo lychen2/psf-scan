@@ -8,8 +8,7 @@ from __future__ import annotations
 from typing import Any
 
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QInputDialog, QMessageBox, QSpinBox,
-    QWidget,
+    QCheckBox, QComboBox, QDoubleSpinBox, QInputDialog, QMessageBox, QWidget,
 )
 
 from . import preset_io
@@ -23,7 +22,7 @@ def panel_state(panel) -> dict[str, Any]:
     for key, control in panel._persistent_checks().items():  # noqa: SLF001
         state[key] = bool(control.isChecked())
     for key, control in panel._persistent_spins().items():  # noqa: SLF001
-        state[key] = float(control.value()) if isinstance(control, QDoubleSpinBox) else int(control.value())
+        state[key] = _spin_value(control)
     rx, ry, rz = panel.cuts.ratios()
     state["cut_x_ratio"] = float(rx)
     state["cut_y_ratio"] = float(ry)
@@ -41,8 +40,7 @@ def apply_state(panel, state: dict[str, Any]) -> None:
             control.setChecked(bool(state[key]))
     for key, control in panel._persistent_spins().items():  # noqa: SLF001
         if key in state:
-            value = state[key]
-            control.setValue(float(value) if isinstance(control, QDoubleSpinBox) else int(value))
+            _set_spin_value(control, state[key])
     panel._cut_ratios_cached = (  # noqa: SLF001
         _ratio(state.get("cut_x_ratio", 1.0)),
         _ratio(state.get("cut_y_ratio", 1.0)),
@@ -58,6 +56,21 @@ def _set_combo(combo: QComboBox, value: str) -> None:
     idx = combo.findText(value)
     if idx >= 0:
         combo.setCurrentIndex(idx)
+
+
+def _spin_value(control: Any) -> int | float:
+    value = control.value()
+    return float(value) if _is_float_spin(control) else int(value)
+
+
+def _set_spin_value(control: Any, value: Any) -> None:
+    control.setValue(float(value) if _is_float_spin(control) else int(value))
+
+
+def _is_float_spin(control: Any) -> bool:
+    if isinstance(control, QDoubleSpinBox):
+        return True
+    return isinstance(getattr(control, "spin", None), QDoubleSpinBox)
 
 
 def _ratio(value: float) -> float:
