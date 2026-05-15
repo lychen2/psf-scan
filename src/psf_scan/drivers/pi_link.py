@@ -248,7 +248,8 @@ def _open_daisy_rs232(
         if comport is None:
             raise RuntimeError("RS232-Daisy 模式缺 COM 端口号")
         dcid = dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate))
-        devlist = list(dev.dcdevices or [])
+        devlist = list(dcid or [])
+        dcid = int(getattr(dev, "dcid", -1))
         numdev = len(devlist)
 
     if numdev == 0:
@@ -317,8 +318,7 @@ def scan_rs232_daisy(dev, comport=None, baudrate: int = 115200, serialport: str 
     else:
         if comport is None:
             raise RuntimeError("未设置 COM 端口号")
-        dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate))
-        devlist = list(dev.dcdevices or [])
+        devlist = list(dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate)) or [])
     try:
         return devlist
     finally:
