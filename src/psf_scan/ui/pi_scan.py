@@ -66,26 +66,25 @@ def enumerate_usb_controllers(controller_mask: str = "C-863") -> list[str]:
 def scan_rs232_daisy(controller: str, comport, baudrate: int = 115200) -> list[str]:
     """扫 RS-232 daisy chain 设备列表 (字符串描述含 device id)。
 
-    扫描完会自动 CloseDaisyChain; 失败/没装 pipython 返回空。
+    扫描完会自动 CloseDaisyChain。
     Linux 上 comport 可为 None 或 '', 自动探测串口路径。
     """
     try:
         from pipython import GCSDevice
-    except ImportError:
-        return []
-    try:
-        from ..drivers import pi_link
-        dev = GCSDevice(controller)
-        import sys
-        if sys.platform in ("linux", "linux2"):
-            sp = comport if isinstance(comport, str) and comport else ""
-            items = pi_link.scan_rs232_daisy(dev, baudrate=int(baudrate), serialport=sp)
-        else:
-            c = int(comport) if comport else 0
-            items = pi_link.scan_rs232_daisy(dev, comport=c, baudrate=int(baudrate))
-        return items
-    except Exception:  # noqa: BLE001
-        return []
+    except ImportError as exc:
+        raise RuntimeError(f"未安装 pipython: {exc}") from exc
+
+    from ..drivers import pi_link
+    dev = GCSDevice(controller)
+    import sys
+
+    if sys.platform in ("linux", "linux2"):
+        sp = comport if isinstance(comport, str) and comport else ""
+        items = pi_link.scan_rs232_daisy(dev, baudrate=int(baudrate), serialport=sp)
+    else:
+        c = int(comport) if comport else 0
+        items = pi_link.scan_rs232_daisy(dev, comport=c, baudrate=int(baudrate))
+    return items
 
 
 def _parse_com_num(name: str) -> Optional[int]:

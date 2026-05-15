@@ -306,22 +306,19 @@ def close_link(dev, daisychain_id: Optional[int]) -> None:
 def scan_rs232_daisy(dev, comport=None, baudrate: int = 115200, serialport: str = "") -> list[str]:
     """扫描 RS-232 daisy chain 上的设备, 返回 dcdevices 字符串列表。
 
-    成功 / 失败都自动 CloseDaisyChain 释放 chain 句柄; 出错时返回空 list。
+    成功 / 失败都自动 CloseDaisyChain 释放 chain 句柄; 出错时抛异常给上层显示。
     Linux 上 comport 可为 None, 自动探测串口路径。
     """
-    try:
-        if _is_linux():
-            devport = serialport or _find_pi_serial_port()
-            if not devport:
-                return []
-            dcid, numdev, devlist = _dll_rs232_daisy_open(dev, devport, baudrate)
-        else:
-            if comport is None:
-                return []
-            dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate))
-            devlist = list(dev.dcdevices or [])
-    except Exception:  # noqa: BLE001
-        return []
+    if _is_linux():
+        devport = serialport or _find_pi_serial_port()
+        if not devport:
+            raise RuntimeError("未找到 PI 串口设备")
+        dcid, numdev, devlist = _dll_rs232_daisy_open(dev, devport, baudrate)
+    else:
+        if comport is None:
+            raise RuntimeError("未设置 COM 端口号")
+        dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate))
+        devlist = list(dev.dcdevices or [])
     try:
         return devlist
     finally:

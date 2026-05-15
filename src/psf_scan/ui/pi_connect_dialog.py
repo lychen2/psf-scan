@@ -14,7 +14,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QDialogButtonBox, QFormLayout, QHBoxLayout, QInputDialog,
-    QLabel, QLineEdit, QPushButton, QSpinBox, QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
+    QLabel, QLineEdit, QMessageBox, QPushButton, QSpinBox, QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from . import theme
@@ -192,7 +192,11 @@ class PIConnectDialog(QDialog):
     def _scan_daisy(self, sp_com: QSpinBox, cb_baud: QComboBox) -> None:
         ctrl = self.cb_controller.currentText().strip() or "C-863"
         com = sp_com.value(); baud = cb_baud.currentData() or 115200
-        items = pi_scan.scan_rs232_daisy(ctrl, com, baud)
+        try:
+            items = pi_scan.scan_rs232_daisy(ctrl, com, baud)
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, tr("pi.chain_title"), str(exc))
+            return
         if not items:
             QInputDialog.getText(self, tr("pi.chain_title"), tr("pi.scan_no_chain")); return
         ch, ok = QInputDialog.getItem(self, tr("pi.chain_title"), tr("pi.chain_devices"), items, 0, False)
