@@ -30,6 +30,7 @@ from .core.scanner import ScanMetadata, ScanParams, ScanResult, Scanner
 from .core.snapshot import VideoRecorder, save_snapshot
 from .core.stage import AVAILABLE_STAGES, StageBase, make_stage
 from .ui import theme
+from .ui.about_dialog import AboutDialog
 from .ui.camera_view import CameraView
 from .ui.control_panel import ControlPanel
 from .ui.pi_connect_dialog import PIConnectDialog
@@ -123,6 +124,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(bar)
         self._idle_status = "ready · connect devices"
         bar.showMessage(self._idle_status)
+        self._build_menubar()
         self._bind_settings()
         self._wire_signals()
         self._diagnostic_timer.start()
@@ -159,6 +161,21 @@ class MainWindow(QMainWindow):
         )
         self._tabs.setCornerWidget(title, Qt.TopLeftCorner)
         return self._tabs
+
+    def _build_menubar(self) -> None:
+        menu = self.menuBar()
+        tools = menu.addMenu(tr("menu.tools"))
+        act_settings = tools.addAction(tr("menu.settings"))
+        act_settings.setShortcut("Ctrl+,")
+        act_settings.triggered.connect(self._on_settings)
+        act_data = tools.addAction(tr("menu.open_data_dir"))
+        act_data.triggered.connect(self._on_open_data_dir)
+        help_menu = menu.addMenu(tr("about.help_menu"))
+        act_about = help_menu.addAction(tr("about.menu"))
+        act_about.triggered.connect(self._show_about)
+
+    def _show_about(self) -> None:
+        AboutDialog(self).exec()
 
     def _build_shell(self) -> QWidget:
         top = QSplitter(Qt.Horizontal)
@@ -902,13 +919,15 @@ class MainWindow(QMainWindow):
     @Slot(object, str)
     def _on_snapshot(self, frame, cmap_name: str) -> None:
         try:
-            tiff_path, png_path = save_snapshot(self._settings.data_dir(), frame, cmap_name)
+            paths = save_snapshot(self._settings.data_dir(), frame, cmap_name)
         except Exception as exc:  # noqa: BLE001
             _log.exception("snapshot save failed")
             QMessageBox.warning(self, "快照失败", str(exc))
             return
-        self.statusBar().showMessage(f"snapshot · {tiff_path.name} + .png", 5000)
-        self.status_strip.set_message(f"snapshot · {tiff_path.name}")
+        self.statusBar().showMessage(
+            f"snapshot · {paths.tiff.name} (+png+csv+json)", 5000,
+        )
+        self.status_strip.set_message(f"snapshot · {paths.tiff.name}")
 
     @Slot(bool)
     def _on_record_toggled(self, on: bool) -> None:

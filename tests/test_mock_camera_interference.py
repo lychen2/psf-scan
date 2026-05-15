@@ -79,4 +79,7 @@ def test_mock_camera_provides_phase_shift_interferograms():
 
 
 def test_mock_sample_phase_has_metalens_scale_variation():
-    assert sample_phase_span(128, 96) > 20.0
+    span = sample_phase_span(128, 96)
+    # NA=0.025 metalens 在 SAMPLE_RADIUS_UM=80 µm 视场内 PV ≈ 11 rad。
+    # 留出 4 rad 余量给 system_phase + zernike 叠加扰动后的边界变化。
+    assert span > 7.0

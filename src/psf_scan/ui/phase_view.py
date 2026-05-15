@@ -140,6 +140,7 @@ class PhaseView(QWidget):
         return wrapped_phase_difference(
             self._result.wrapped_phase,
             self._reference_result.wrapped_phase,
+            reference_smoothing_sigma_px=float(self._controls_widget.sp_ref_sigma.value()),
         )
 
     def _params(self, *, source: str) -> PhaseReconstructionParams:

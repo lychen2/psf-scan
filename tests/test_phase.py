@@ -40,6 +40,23 @@ def test_reference_correction_removes_system_phase():
     assert _phase_error(corrected, sample_phase) < 0.08
 
 
+def test_reference_smoothing_suppresses_noisy_reference():
+    rng = np.random.default_rng(0)
+    h, w = 128, 128
+    yy, xx = np.mgrid[:h, :w].astype(np.float32)
+    system = 0.8 * (yy / h + 0.7 * xx / w)
+    feature = 0.5 * np.exp(-(((xx - w / 2) ** 2 + (yy - h / 2) ** 2) / 10.0 ** 2))
+    sample_phase = (system + feature).astype(np.float32)
+    noisy_ref_phase = (system + 0.45 * rng.standard_normal((h, w))).astype(np.float32)
+
+    raw = wrapped_phase_difference(sample_phase, noisy_ref_phase)
+    smoothed = wrapped_phase_difference(
+        sample_phase, noisy_ref_phase, reference_smoothing_sigma_px=3.0,
+    )
+    bg = ((xx - w / 2) ** 2 + (yy - h / 2) ** 2) > 30.0 ** 2
+    assert smoothed[bg].std() < 0.4 * raw[bg].std()
+
+
 def test_save_phase_payload_writes_arrays_and_meta(tmp_path):
     image, _phase = _fringe_with_phase()
     result = reconstruct_off_axis_phase(image, _params())

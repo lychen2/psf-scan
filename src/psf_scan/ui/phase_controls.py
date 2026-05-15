@@ -94,9 +94,12 @@ class PhaseControls(QWidget):
         self.sp_x = _spin(0.0, 100000.0, 0.0, "")
         self.sp_y = _spin(0.0, 100000.0, 0.0, "")
         self.sp_radius = _spin(2.0, 10000.0, DEFAULT_FILTER_RADIUS_PX, " px")
+        self.sp_ref_sigma = _spin(0.0, 64.0, 0.0, " px")
+        self.sp_ref_sigma.setToolTip(tr("phase.ref_sigma_tip"))
         for label, spin in ((tr("phase.sideband_x"), self.sp_x),
                             (tr("phase.sideband_y"), self.sp_y),
-                            (tr("phase.radius"), self.sp_radius)):
+                            (tr("phase.radius"), self.sp_radius),
+                            (tr("phase.ref_sigma"), self.sp_ref_sigma)):
             row.addWidget(HintLabel(label))
             row.addWidget(spin)
 

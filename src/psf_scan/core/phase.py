@@ -10,6 +10,7 @@ from pathlib import Path
 import numpy as np
 import tifffile
 from PIL import Image
+from scipy.ndimage import gaussian_filter
 
 PHASE_ALGORITHM_VERSION = 1
 MIN_FILTER_RADIUS_PX = 2.0
@@ -83,11 +84,17 @@ def reconstruct_off_axis_phase(
     )
 
 
-def wrapped_phase_difference(sample: np.ndarray, reference: np.ndarray) -> np.ndarray:
+def wrapped_phase_difference(
+    sample: np.ndarray, reference: np.ndarray, *,
+    reference_smoothing_sigma_px: float = 0.0,
+) -> np.ndarray:
     if sample.shape != reference.shape:
         raise ValueError(f"参考图尺寸不匹配: {reference.shape} != {sample.shape}")
-    delta = np.exp(1j * sample) / np.exp(1j * reference)
-    return np.angle(delta).astype(np.float32)
+    if reference_smoothing_sigma_px > 0.0:
+        c = np.exp(1j * reference.astype(np.float32))
+        s = float(reference_smoothing_sigma_px)
+        reference = np.angle(gaussian_filter(c.real, s) + 1j * gaussian_filter(c.imag, s)).astype(np.float32)
+    return np.angle(np.exp(1j * sample) / np.exp(1j * reference)).astype(np.float32)
 
 
 def unwrap_phase(wrapped: np.ndarray) -> np.ndarray:

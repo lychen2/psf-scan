@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -11,6 +13,14 @@ import tifffile
 from PIL import Image
 
 from ..ui.colormap_resolver import resolve_or_default
+
+
+@dataclass(frozen=True)
+class SnapshotPaths:
+    tiff: Path
+    png: Path
+    csv: Path
+    meta: Path
 
 
 def _ensure_dir(path: Path) -> Path:
@@ -33,15 +43,55 @@ def _apply_colormap_rgb(frame: np.ndarray, cmap_name: str) -> np.ndarray:
     return lut[idx]
 
 
-def save_snapshot(base_dir: Path, frame: np.ndarray, cmap_name: str) -> tuple[Path, Path]:
-    """落两份：原始位深 TIFF + colormap 后的 PNG。返回 (tiff_path, png_path)。"""
+def _save_csv(path: Path, frame: np.ndarray) -> None:
+    if np.issubdtype(frame.dtype, np.integer):
+        np.savetxt(path, frame, delimiter=",", fmt="%d")
+    else:
+        np.savetxt(path, frame, delimiter=",", fmt="%.6g")
+
+
+def _save_meta(path: Path, frame: np.ndarray, cmap_name: str) -> None:
+    f64 = frame.astype(np.float64, copy=False)
+    meta: dict[str, object] = {
+        "saved_at": time.time(),
+        "saved_at_iso": time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime()),
+        "shape": list(frame.shape),
+        "dtype": str(frame.dtype),
+        "cmap": cmap_name,
+        "min": float(f64.min()),
+        "max": float(f64.max()),
+        "mean": float(f64.mean()),
+        "std": float(f64.std()),
+    }
+    if np.issubdtype(frame.dtype, np.integer):
+        info = np.iinfo(frame.dtype)
+        sat_count = int(np.sum(frame >= info.max - 1))
+        meta["max_value"] = int(info.max)
+        meta["saturated_pixels"] = sat_count
+        meta["saturated_fraction"] = sat_count / float(frame.size)
+    path.write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")
+
+
+def save_snapshot(base_dir: Path, frame: np.ndarray, cmap_name: str) -> SnapshotPaths:
+    """落 4 份原始数据:
+    - .tif: 位深无损图
+    - .png: colormap 后的预览
+    - .csv: 像素强度 2D 矩阵 (utf-8, 逗号分隔; 整型用 %d, 浮点用 %.6g)
+    - .json: shape/dtype/colormap/统计/饱和像素元数据
+    """
     out = _ensure_dir(Path(base_dir) / "snapshots")
     stem = f"cam_{_timestamp()}"
-    tiff_path = out / f"{stem}.tif"
-    png_path = out / f"{stem}.png"
-    tifffile.imwrite(tiff_path, frame)
-    Image.fromarray(_apply_colormap_rgb(frame, cmap_name)).save(png_path)
-    return tiff_path, png_path
+    paths = SnapshotPaths(
+        tiff=out / f"{stem}.tif",
+        png=out / f"{stem}.png",
+        csv=out / f"{stem}.csv",
+        meta=out / f"{stem}.json",
+    )
+    tifffile.imwrite(paths.tiff, frame)
+    Image.fromarray(_apply_colormap_rgb(frame, cmap_name)).save(paths.png)
+    _save_csv(paths.csv, frame)
+    _save_meta(paths.meta, frame, cmap_name)
+    return paths
 
 
 class VideoRecorder:
