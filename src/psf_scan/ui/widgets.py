@@ -6,6 +6,9 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QWidget
 
 
+from . import theme
+
+
 class SectionHeader(QWidget):
     """小型 section 标题：左侧大写跟踪字标签，右侧延伸的细横线。"""
 
@@ -13,7 +16,7 @@ class SectionHeader(QWidget):
         super().__init__(parent)
         h = QHBoxLayout(self)
         h.setContentsMargins(0, 0, 0, 0)
-        h.setSpacing(10)
+        h.setSpacing(theme.G_8)
         lbl = QLabel(title.upper())
         lbl.setProperty("role", "section")
         h.addWidget(lbl)

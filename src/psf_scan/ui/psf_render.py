@@ -64,10 +64,18 @@ def make_volume(frames: np.ndarray) -> np.ndarray:
     return frames.astype(np.float32, copy=False)
 
 
-def resolve_levels(volume: np.ndarray, options: RenderOptions) -> tuple[float, float]:
+def resolve_levels(
+    volume: np.ndarray,
+    options: RenderOptions,
+    *,
+    hint: tuple[float, float] | None = None,
+) -> tuple[float, float]:
     if options.mode == MODE_VOLUME or options.auto_levels:
-        lo = float(np.nanmin(volume))
-        hi = float(np.nanmax(volume))
+        if hint is not None:
+            lo, hi = float(hint[0]), float(hint[1])
+        else:
+            lo = float(np.nanmin(volume))
+            hi = float(np.nanmax(volume))
     else:
         lo = float(options.level_min)
         hi = float(options.level_max)

@@ -7,10 +7,10 @@ from collections import deque
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6.QtCore import Qt, Signal, Slot
+from PySide6.QtCore import Qt, QTimer, Signal, Slot
 from PySide6.QtGui import QFont, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
-    QComboBox, QDoubleSpinBox, QHBoxLayout, QLabel, QSpinBox, QStackedLayout,
+    QComboBox, QDoubleSpinBox, QFrame, QHBoxLayout, QLabel, QSpinBox, QStackedLayout,
     QMessageBox, QToolButton, QVBoxLayout, QWidget,
 )
 
@@ -18,6 +18,7 @@ from . import theme
 from .camera_advanced import CameraAdvancedBar
 from .colormap_resolver import resolve_colormap as _resolve_colormap
 from .motion import flash
+from .sparkline import Sparkline
 from ..core.pixel_calibration import from_settings as pixel_calibration_from_settings
 from ..core.sharpness import brenner
 from ..core.i18n import tr
@@ -26,6 +27,13 @@ from .widgets import HintLabel, MeterLabel
 
 CAMERA_CMAPS = ("viridis", "gray", "hot", "rainbow", "magma", "inferno", "plasma")
 DEFAULT_CMAP = "gray"
+
+
+def _vrule() -> QFrame:
+    rule = QFrame()
+    rule.setFixedWidth(1)
+    rule.setStyleSheet(f"background:{theme.BORDER0};")
+    return rule
 
 
 def _empty_html(main_key: str, hint_key: str) -> str:
@@ -80,10 +88,20 @@ class CameraView(QWidget):
         self._cmap_name = DEFAULT_CMAP
         self._apply_colormap(DEFAULT_CMAP)
         self._empty = self._build_empty_state()
-        self._image_stack = QStackedLayout()
+        self._image_host = QWidget()
+        self._image_stack = QStackedLayout(self._image_host)
         self._image_stack.addWidget(self._empty)
         self._image_stack.addWidget(self._iv)
-        layout.addLayout(self._image_stack, stretch=1)
+        self._sat_badge = QLabel("SATURATED", self._image_host)
+        self._sat_badge.setProperty("role", "sat-badge")
+        self._sat_badge.hide()
+        _original_resize = self._image_host.resizeEvent
+        def _resize_with_overlay(event):
+            _original_resize(event)
+            if self._sat_badge.isVisible():
+                self._position_sat_badge()
+        self._image_host.resizeEvent = _resize_with_overlay
+        layout.addWidget(self._image_host, stretch=1)
 
         layout.addWidget(self._build_meter_bar())
 
@@ -94,9 +112,13 @@ class CameraView(QWidget):
             sc.setContext(Qt.WidgetWithChildrenShortcut)
             sc.activated.connect(fn)
 
-        self._frames = 0
-        self._t0 = time.time()
+        self._last_frame_t: float | None = None
         self._fps = 0.0
+        self._fps_dirty = False
+        self._fps_timer = QTimer(self)
+        self._fps_timer.setInterval(100)
+        self._fps_timer.timeout.connect(self._flush_fps)
+        self._fps_timer.start()
         self._levels_set = False
         self._max_val = 255
         self._saturated = False
@@ -156,7 +178,7 @@ class CameraView(QWidget):
         self.sp_gain.editingFinished.connect(lambda: self.gain_changed.emit(self.sp_gain.value()))
         h.addWidget(self.sp_gain)
 
-        h.addSpacing(12)
+        h.addWidget(_vrule())
         h.addWidget(HintLabel(tr("camera.colormap")))
         self.cb_cmap = QComboBox()
         self.cb_cmap.addItems(CAMERA_CMAPS)
@@ -166,7 +188,7 @@ class CameraView(QWidget):
         self.cb_cmap.currentTextChanged.connect(self._on_cmap_changed)
         h.addWidget(self.cb_cmap)
 
-        h.addSpacing(8)
+        h.addWidget(_vrule())
         self.btn_snapshot = self._action_button(tr("camera.snapshot"))
         self.btn_snapshot.setEnabled(False)
         self.btn_snapshot.setToolTip(tr("tip.snapshot"))
@@ -180,7 +202,6 @@ class CameraView(QWidget):
         self.btn_record.toggled.connect(self._on_record_toggled)
         h.addWidget(self.btn_record)
 
-        h.addSpacing(8)
         self.btn_line_profile = QToolButton()
         self.btn_line_profile.setText(tr("camera.line_profile_tool"))
         self.btn_line_profile.setCheckable(True)
@@ -197,7 +218,7 @@ class CameraView(QWidget):
         self.btn_line_profile.toggled.connect(self._on_line_profile_toggled)
         h.addWidget(self.btn_line_profile)
 
-        h.addSpacing(8)
+        h.addWidget(_vrule())
         self.btn_advanced = QToolButton()
         self.btn_advanced.setText("▾ " + tr("camera.advanced"))
         self.btn_advanced.setCheckable(True)
@@ -215,12 +236,6 @@ class CameraView(QWidget):
         h.addWidget(self.btn_advanced)
 
         h.addStretch()
-        self._sat_lbl = QLabel("")
-        self._sat_lbl.setStyleSheet(
-            f"color:{theme.DANGER};font-family:'Iosevka Term',monospace;"
-            "font-size:11px;font-weight:600;letter-spacing:1px;"
-        )
-        h.addWidget(self._sat_lbl)
         return bar
 
     def _build_meter_bar(self) -> QWidget:
@@ -233,9 +248,14 @@ class CameraView(QWidget):
         self._peak_lbl = MeterLabel(tr("camera.peak") + " ─")
         self._fps_lbl = MeterLabel("─.─ fps")
         self._sharpness_lbl = MeterLabel("sharp ─ / max ─")
+        self._sharpness_lbl.hide()
+        self._sharpness_spark = Sparkline(width=60, height=14, capacity=60)
+        self._sharpness_spark.setToolTip(tr("tip.sharpness_trend"))
         self._pixel_calibration_lbl = MeterLabel(tr("pixel_calibration.meter_off"))
+        self._pixel_calibration_lbl.hide()
         h.addWidget(self._size_lbl)
         h.addWidget(self._peak_lbl)
+        h.addWidget(self._sharpness_spark)
         h.addWidget(self._sharpness_lbl)
         h.addWidget(self._pixel_calibration_lbl)
         h.addStretch()
@@ -291,18 +311,26 @@ class CameraView(QWidget):
         self._display_total_ms += elapsed_ms
         self._display_max_ms = max(self._display_max_ms, elapsed_ms)
 
+    def _flush_fps(self) -> None:
+        if not self._fps_dirty:
+            return
+        self._fps_dirty = False
+        self._fps_lbl.setText(tr("camera.fps_val", fps=self._fps))
+
     def _update_frame(self, frame: np.ndarray) -> None:
         self._image_stack.setCurrentWidget(self._iv)
         self._last_raw_frame = frame
         if not self.btn_snapshot.isEnabled():
             self.btn_snapshot.setEnabled(True)
             self.btn_record.setEnabled(True)
-        self._frames += 1
-        elapsed = time.time() - self._t0
-        if elapsed >= 0.5:
-            self._fps = self._frames / elapsed
-            self._frames = 0
-            self._t0 = time.time()
+        now = time.perf_counter()
+        if self._last_frame_t is not None:
+            dt = now - self._last_frame_t
+            if dt > 0:
+                inst = 1.0 / dt
+                self._fps = inst if self._fps <= 0 else 0.85 * self._fps + 0.15 * inst
+        self._last_frame_t = now
+        self._fps_dirty = True
 
         if not self._levels_set:
             self._iv.setImage(
@@ -320,16 +348,21 @@ class CameraView(QWidget):
         h, w = frame.shape[:2]
         self._size_lbl.setText(tr("camera.image_dims", w=w, h=h))
         self._peak_lbl.setText(tr("camera.peak_val", val=peak))
-        self._fps_lbl.setText(tr("camera.fps_val", fps=self._fps))
-        score = brenner(frame)
-        self._sharpness_window.append(score)
-        best = max(self._sharpness_window) if self._sharpness_window else score
-        self._sharpness_lbl.setText(f"sharp {score:.1f} / max {best:.1f}")
-        # 饱和：≥ 99% 满量程 视为饱和
+        # Brenner + sparkline 只在 line-profile 工具开着时才需要 — 默认隐藏
+        # 状态下省掉每帧 ~16 MB/s 的 float32 复制与四次大数组运算。
+        if self._line_roi is not None:
+            score = brenner(frame)
+            self._sharpness_window.append(score)
+            self._sharpness_spark.push(score)
+            best = max(self._sharpness_window) if self._sharpness_window else score
+            self._sharpness_lbl.setText(f"sharp {score:.1f} / max {best:.1f}")
+        # 饱和：≥ 99% 满量程 视为饱和; 只在翻转时碰 visibility / 位置 / 闪烁。
         sat = peak >= int(self._max_val * 0.99)
-        self._sat_lbl.setText(tr("camera.saturated") if sat else "")
-        if sat and not self._saturated:
-            flash(self._sat_lbl, low=0.2)
+        if sat != self._saturated:
+            self._sat_badge.setVisible(sat)
+            if sat:
+                self._position_sat_badge()
+                flash(self._sat_badge, low=0.2)
         self._saturated = sat
         self.metrics_changed.emit(peak, self._fps, sat)
         if self._line_roi is not None:
@@ -382,6 +415,7 @@ class CameraView(QWidget):
         if self._line_roi is not None:
             return
         from .line_profile_dialog import LineProfileDialog
+        self._sharpness_lbl.show()
         # 默认线段放在图像中间偏右下, 端点离边 20%
         frame = self._last_raw_frame
         if frame is not None:
@@ -421,6 +455,10 @@ class CameraView(QWidget):
             self._line_roi = None
         if self._line_dialog is not None:
             self._line_dialog.hide()
+        self._sharpness_lbl.hide()
+        # 离开线轮廓模式时清掉趋势/历史，避免下次启用看到陈旧数据。
+        self._sharpness_window.clear()
+        self._sharpness_spark.clear()
 
     def _refresh_line_profile(self) -> None:
         if self._line_roi is None or self._line_dialog is None:
@@ -443,6 +481,12 @@ class CameraView(QWidget):
     def _on_advanced_toggled(self, on: bool) -> None:
         self._advanced.setVisible(on)
         self.btn_advanced.setText(("▴ " if on else "▾ ") + tr("camera.advanced"))
+
+    def _position_sat_badge(self) -> None:
+        b = self._sat_badge
+        b.adjustSize()
+        b.move(self._image_host.width() - b.width() - 12, 12)
+        b.raise_()
 
     def _action_button(self, label: str) -> QToolButton:
         btn = QToolButton()
@@ -493,13 +537,16 @@ class CameraView(QWidget):
             )
         except Exception as exc:  # noqa: BLE001
             self._pixel_calibration_lbl.setText(tr("pixel_calibration.meter_invalid", msg=str(exc)))
+            self._pixel_calibration_lbl.show()
             return
         if calibration is None:
+            self._pixel_calibration_lbl.hide()
             self._pixel_calibration_lbl.setText(tr("pixel_calibration.meter_off"))
             return
         self._pixel_calibration_lbl.setText(
             tr("pixel_calibration.meter_value", um=calibration.microns_per_pixel),
         )
+        self._pixel_calibration_lbl.show()
 
     def _on_pixel_calibration_requested(self, line_length_px: float, line_length_um: float) -> None:
         if self._settings is None:
@@ -525,11 +572,13 @@ class CameraView(QWidget):
         self._peak_lbl.setText(tr("camera.peak") + " ─")
         self._fps_lbl.setText("─.─ fps")
         self._sharpness_lbl.setText("sharp ─ / max ─")
-        self._sat_lbl.setText("")
+        self._sharpness_spark.clear()
+        self._sat_badge.hide()
         self._saturated = False
         self._levels_set = False
-        self._frames = 0
+        self._last_frame_t = None
         self._fps = 0.0
+        self._fps_dirty = False
         self._sharpness_window.clear()
         self._last_raw_frame = None
         self.sp_exp.setEnabled(False)

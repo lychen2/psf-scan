@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "psf_scan"
-version = "1.0.1"
+version = "1.1.0"
 description = "Stage-scan PSF acquisition GUI with pluggable stage and camera drivers."
 requires-python = ">=3.10"
 dependencies = [

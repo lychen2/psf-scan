@@ -75,14 +75,14 @@ class PsfControlPanel(QWidget):
         super().__init__(parent)
         self.setObjectName("PsfControlPanel")
         self.setStyleSheet(
-            f"QWidget#PsfControlPanel{{background:{theme.BG0};"
+            f"QWidget#PsfControlPanel{{background:{theme.BG1};"
             f"border-top:1px solid {theme.BORDER0};}}"
         )
         self._has_volume_shape = False
         self._cut_ratios_cached: tuple[float, float, float] = (1.0, 1.0, 1.0)
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 8, 12, 8)
-        root.setSpacing(6)
+        root.setContentsMargins(theme.G_16, theme.G_8, theme.G_16, theme.G_8)
+        root.setSpacing(theme.G_8)
         root.addLayout(self._mode_row())
         root.addLayout(self._detail_row())
         root.addWidget(self.cuts)
@@ -170,7 +170,7 @@ class PsfControlPanel(QWidget):
         self.cuts = VolumeCutControls()
         self._make_controls()
         row = QHBoxLayout()
-        row.setSpacing(8)
+        row.setSpacing(theme.G_8)
         for widget in self._row_widgets():
             row.addWidget(widget)
         row.addStretch()
@@ -178,7 +178,7 @@ class PsfControlPanel(QWidget):
 
     def _detail_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        row.setSpacing(8)
+        row.setSpacing(theme.G_8)
         row.addSpacing(DETAIL_ROW_INDENT)
         for widget in self._detail_widgets():
             row.addWidget(widget)
@@ -280,7 +280,7 @@ class PsfControlPanel(QWidget):
         self.btn_load_preset.clicked.connect(lambda: psf_preset.prompt_load(self))
         self.btn_export_plot.clicked.connect(self.export_plot_requested.emit)
         info = QHBoxLayout()
-        info.setSpacing(20)
+        info.setSpacing(theme.G_24)
         for widget in (self.idx_label, self.pos_label, self.peak_label):
             info.addWidget(widget)
         info.addWidget(self.status_label, stretch=1)

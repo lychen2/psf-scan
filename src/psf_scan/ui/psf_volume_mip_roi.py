@@ -18,8 +18,8 @@ from . import theme
 THUMB_W = 180
 THUMB_H = 180
 ROI_PEN = "#2f73a3"
-ROI_HOVER_PEN = "#b55345"
-RENDERED_HINT_PEN = "#d6892b"  # 暖橙：表示 ROI 被预算回缩后的实际渲染范围
+ROI_HOVER_PEN = theme.DANGER
+RENDERED_HINT_PEN = theme.WARN
 
 
 class MipRoiOverlay(QWidget):

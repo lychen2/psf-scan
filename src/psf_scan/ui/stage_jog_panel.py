@@ -82,15 +82,9 @@ class StageJogPanel(QWidget):
             row_cal.addWidget(w, stretch=1)
         outer.addLayout(row_cal)
 
-        # Row 3: E-STOP (永久红色, 不仅是 hover)
-        self.btn_estop = _btn(tr("jog.estop"), danger=True)
+        # Row 3: E-STOP (永久红色, 不仅是 hover) — QSS [role="estop"]
+        self.btn_estop = _btn(tr("jog.estop"), estop=True)
         self.btn_estop.setToolTip(tr("tip.estop"))
-        self.btn_estop.setStyleSheet(
-            "QPushButton{background:#e63939;color:#fff;border:0;border-radius:3px;"
-            "padding:8px;font-weight:700;letter-spacing:2px;font-size:11px;}"
-            "QPushButton:hover{background:#ff4c4c;}"
-            "QPushButton:pressed{background:#cc0000;}"
-        )
         self.btn_estop.clicked.connect(self.stop_requested.emit)
         outer.addWidget(self.btn_estop)
 

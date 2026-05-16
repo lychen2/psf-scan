@@ -11,9 +11,9 @@ import time
 from typing import Optional
 
 from PySide6.QtCore import Qt, QObject, QThread, QTimer, QUrl, Signal, Slot
-from PySide6.QtGui import QDesktopServices, QFont
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
-    QFileDialog, QLabel, QMainWindow, QMessageBox, QSplitter, QStatusBar,
+    QFileDialog, QMainWindow, QMessageBox, QSplitter, QStatusBar,
     QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -111,17 +111,18 @@ class MainWindow(QMainWindow):
 
         self.cam_view = CameraView()
         self.stage_view = StageView()
-        self.control = ControlPanel(AVAILABLE_STAGES, AVAILABLE_CAMERAS)
+        self.control = ControlPanel()
         self.stage_jog = self.control.stage_jog
         self.psf_view = PSFView()
         self.phase_view = PhaseView(live_frame_provider=self.cam_view.current_raw_frame)
-        self.status_strip = StatusStrip()
+        self.status_strip = StatusStrip(AVAILABLE_STAGES, AVAILABLE_CAMERAS)
 
         self._tabs = self._build_tabs()
         self.setCentralWidget(self._build_shell())
 
         bar = QStatusBar()
         self.setStatusBar(bar)
+        bar.hide()
         self._idle_status = "ready · connect devices"
         bar.showMessage(self._idle_status)
         self._build_menubar()
@@ -154,12 +155,6 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self.cam_view, "LIVE IMAGE")
         self._tabs.addTab(self.psf_view, "PSF STACK")
         self._tabs.addTab(self.phase_view, "PHASE")
-        title = QLabel("PSF·SCAN")
-        title.setFont(QFont(self.font().family(), 11, QFont.Bold))
-        title.setStyleSheet(
-            f"color:{theme.TEXT0};letter-spacing:3px;padding:0 16px 0 6px;"
-        )
-        self._tabs.setCornerWidget(title, Qt.TopLeftCorner)
         return self._tabs
 
     def _build_menubar(self) -> None:
@@ -178,23 +173,34 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     def _build_shell(self) -> QWidget:
-        top = QSplitter(Qt.Horizontal)
-        top.addWidget(self._tabs)
-        top.addWidget(self.stage_view)
-        top.setSizes([920, 320])
-        top.setHandleWidth(1)
+        main_content = QSplitter(Qt.Horizontal)
+        main_content.addWidget(self._tabs)
 
-        main = QSplitter(Qt.Vertical)
-        main.addWidget(top)
-        main.addWidget(self.control)
-        main.setSizes([460, 400])
-        main.setHandleWidth(1)
+        right_panel = QSplitter(Qt.Vertical)
+        right_panel.addWidget(self.stage_view)
+        right_panel.addWidget(self.control)
+        right_panel.setSizes([100, 900])
+        right_panel.setHandleWidth(1)
+
+        # 右侧容器顶部留出与左侧 tab bar 等高的内边距, 让 stage_view 顶部对齐到
+        # 第一个 tab 的内容顶。读取 sizeHint 而非硬编码,避免字号/QSS 改动后失准。
+        right_container = QWidget()
+        right_layout = QVBoxLayout(right_container)
+        tab_bar_h = self._tabs.tabBar().sizeHint().height()
+        right_layout.setContentsMargins(0, tab_bar_h, 0, 0)
+        right_layout.setSpacing(0)
+        right_layout.addWidget(right_panel)
+
+        main_content.addWidget(right_container)
+        main_content.setSizes([800, 300])
+        main_content.setHandleWidth(1)
+
         shell = QWidget()
         shell_layout = QVBoxLayout(shell)
         shell_layout.setContentsMargins(0, 0, 0, 0)
         shell_layout.setSpacing(0)
         shell_layout.addWidget(self.status_strip)
-        shell_layout.addWidget(main, stretch=1)
+        shell_layout.addWidget(main_content, stretch=1)
         return shell
 
     def _compute_axis_signs(self) -> tuple[int, int, int]:
@@ -235,15 +241,16 @@ class MainWindow(QMainWindow):
         return iface
 
     def _wire_signals(self) -> None:
-        self.control.connect_requested.connect(self._on_connect)
-        self.control.disconnect_requested.connect(self._on_disconnect)
+        self.status_strip.connect_requested.connect(self._on_connect)
+        self.status_strip.disconnect_requested.connect(self._on_disconnect)
+        self.status_strip.pi_settings_requested.connect(self._on_pi_settings)
+        self.status_strip.stage_kind_changed.connect(self.control.set_single_axis)
         self.control.move_requested.connect(self._on_move)
         self.control.home_requested.connect(self._on_home)
         self.control.autofocus_requested.connect(self._on_autofocus_start)
         self.control.scan_started.connect(self._on_scan_start)
         self.control.scan_canceled.connect(self._on_scan_cancel)
         self.control.plan_changed.connect(self.status_strip.set_plan)
-        self.control.pi_settings_requested.connect(self._on_pi_settings)
         self.control.single_axis_changed.connect(self.stage_view.set_single_axis)
         self.stage_jog.stop_requested.connect(self._on_emergency_stop)
         self.stage_jog.set_zero_requested.connect(self._on_set_zero)
@@ -260,12 +267,11 @@ class MainWindow(QMainWindow):
         self.cam_view.snapshot_requested.connect(self._on_snapshot)
         self.cam_view.record_toggled.connect(self._on_record_toggled)
         self.psf_view.export_plot_requested.connect(self._on_export_plot)
-        self.status_strip.change_data_dir_requested.connect(self._on_change_data_dir)
-        self.status_strip.open_data_dir_requested.connect(self._on_open_data_dir)
         self.status_strip.settings_requested.connect(self._on_settings)
 
     def _bind_settings(self) -> None:
         self.control.bind_settings(self._settings)
+        self.status_strip.bind_device_combos(self._settings)
         self.psf_view.bind_settings(self._settings)
         self.cam_view.bind_settings(self._settings)
         self.phase_view.bind_settings(self._settings)
@@ -371,6 +377,7 @@ class MainWindow(QMainWindow):
         self.control.set_autofocus_allowed(self._settings.autofocus_enabled())
         device_text = self._device_summary(stage, stage_kind, camera)
         self.status_strip.set_state(STATE_ONLINE, tr("status.online"))
+        self.status_strip.set_device_label(device_text)
         self.status_strip.set_message(device_text)
         self.statusBar().showMessage(f"connected · {device_text}", 5000)
 
@@ -793,6 +800,8 @@ class MainWindow(QMainWindow):
                 low_light=result.low_light,
                 saturated=result.saturated,
             )
+        # 清除 autofocus 期间可能被 stage/camera 误触发的 ERROR 状态
+        self.status_strip.set_state(STATE_ONLINE, tr("status.online"))
         self.statusBar().showMessage(tr("autofocus.done", z=result.best_z), 8000)
         self.status_strip.set_message(tr("autofocus.done", z=result.best_z))
         if result.saturated:
@@ -809,6 +818,7 @@ class MainWindow(QMainWindow):
         if self._af_dialog is not None:
             self._af_dialog.close()
             self._af_dialog = None
+        self.status_strip.set_state(STATE_ONLINE, tr("status.online"))
         self.statusBar().showMessage(tr("autofocus.canceled"), 5000)
         self.status_strip.set_message(tr("autofocus.canceled"))
 
@@ -871,8 +881,11 @@ class MainWindow(QMainWindow):
             self._repeat_reset()
             return
         self.stage_view.set_scan_path(path)
+        self.status_strip.set_scan_plan_ticks(len(path))
         self.psf_view.begin_scan(path)
-        self._tabs.setCurrentIndex(0)
+        # 时间序列 2+ 轮不抢页签，留给用户当前正在看的视图
+        if self._repeat_done == 0:
+            self._tabs.setCurrentIndex(0)
 
         self._scan_thread = QThread()
         self._scanner = Scanner(self._stage, self._camera)
@@ -986,7 +999,9 @@ class MainWindow(QMainWindow):
         result.pixel_calibration = self._scan_pixel_calibration
         display_frames = result.corrected_frames if result.corrected_frames is not None else result.frames
         self.psf_view.set_data(display_frames, result.positions)
-        self._tabs.setCurrentIndex(1)
+        # 单次扫描或时间序列末轮才自动跳到 PSF STACK，避免每轮闪页签
+        if self._repeat_total <= 1 or self._repeat_done >= self._repeat_total - 1:
+            self._tabs.setCurrentIndex(1)
         # streaming: stack.h5 已在扫描线程内写完, 这里收尾 attrs + 走 finalize 路径
         writer = self._scan_writer
         if writer is not None:

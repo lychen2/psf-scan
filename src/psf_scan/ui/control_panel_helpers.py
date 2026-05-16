@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import (
     QComboBox, QDoubleSpinBox, QHBoxLayout, QLayout, QPushButton, QSpinBox,
-    QVBoxLayout, QWidget,
+    QStyledItemDelegate, QVBoxLayout, QWidget,
 )
 
+from . import theme
 from .widgets import HintLabel, SectionHeader
 
 
@@ -14,17 +15,16 @@ def section(title: str, items: list) -> QWidget:
     widget = QWidget()
     layout = QVBoxLayout(widget)
     layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(6)
+    layout.setSpacing(theme.G_8)
     layout.addWidget(SectionHeader(title))
     for item in items:
         layout.addLayout(item) if isinstance(item, QLayout) else layout.addWidget(item)
-    layout.addStretch()
     return widget
 
 
 def row(*items, _stretch: bool = False) -> QHBoxLayout:
     layout = QHBoxLayout()
-    layout.setSpacing(8)
+    layout.setSpacing(theme.G_8)
     for item in items:
         layout.addSpacing(item) if isinstance(item, int) else layout.addWidget(item)
     if _stretch:
@@ -42,7 +42,7 @@ def row_widget(*items, _stretch: bool = False) -> QWidget:
 
 def kv(label: str, widget: QWidget) -> QHBoxLayout:
     layout = QHBoxLayout()
-    layout.setSpacing(8)
+    layout.setSpacing(theme.G_8)
     hint = HintLabel(label)
     hint.setMinimumWidth(78)
     layout.addWidget(hint)
@@ -54,7 +54,7 @@ def axis(name: str, control: QDoubleSpinBox) -> QWidget:
     widget = QWidget()
     layout = QVBoxLayout(widget)
     layout.setContentsMargins(0, 0, 0, 0)
-    layout.setSpacing(2)
+    layout.setSpacing(theme.G_4)
     layout.addWidget(HintLabel(name))
     layout.addWidget(control)
     return widget
@@ -85,6 +85,7 @@ def combo(items: list[str]) -> QComboBox:
     control = QComboBox()
     control.addItems(items)
     control.setMinimumWidth(110)
+    control.setItemDelegate(QStyledItemDelegate(control))
     return control
 
 
@@ -93,12 +94,15 @@ def button(
     *,
     primary: bool = False,
     danger: bool = False,
+    estop: bool = False,
     enabled: bool = True,
 ) -> QPushButton:
     control = QPushButton(text)
-    control.setEnabled(enabled)
     if primary:
         control.setProperty("role", "primary")
     elif danger:
         control.setProperty("role", "danger")
+    elif estop:
+        control.setProperty("role", "estop")
+    control.setEnabled(enabled)
     return control

@@ -16,6 +16,7 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
 from .._version import __version__
 from ..core.i18n import tr
+from . import theme
 
 SUPPORT_ENV = "PSF_SCAN_SUPPORT_INFO"
 SUPPORT_FILE = "support.txt"
@@ -65,7 +66,7 @@ class AboutDialog(QDialog):
 
         deps = QLabel(tr("about.dependencies"))
         deps.setWordWrap(True)
-        deps.setStyleSheet("color:#666;font-size:11px;")
+        deps.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_BODY};")
         layout.addWidget(deps)
 
         support = QLabel(resolve_support_info())

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QCheckBox, QComboBox, QDoubleSpinBox, QSpinBox, QWidget
+from PySide6.QtWidgets import (
+    QCheckBox, QComboBox, QDoubleSpinBox, QSpinBox, QStyledItemDelegate, QWidget,
+)
 
 from .motion import set_motion_visible
 
@@ -15,6 +17,7 @@ def combo(items: tuple[str, ...], width: int) -> QComboBox:
     control = QComboBox()
     control.addItems(items)
     control.setMinimumWidth(width)
+    control.setItemDelegate(QStyledItemDelegate(control))
     return control
 
 

@@ -47,6 +47,7 @@ _DICT: dict[str, dict[str, str]] = {
     "status.change": {"zh": "更改…", "en": "change…"},
     "status.offline": {"zh": "未连接", "en": "offline"},
     "status.online": {"zh": "在线", "en": "online"},
+    "status.disconnect_link": {"zh": "断开", "en": "disconnect"},
     "status.scanning": {"zh": "扫描中", "en": "scanning"},
     "status.saved": {"zh": "已保存", "en": "saved"},
     "status.canceled": {"zh": "已取消", "en": "canceled"},
@@ -54,8 +55,8 @@ _DICT: dict[str, dict[str, str]] = {
     "status.not_saved": {"zh": "未保存", "en": "not saved"},
     "status.saving": {"zh": "保存中…", "en": "saving…"},
     "status.timeseries_waiting": {
-        "zh": "时间序列 · 已完成 {done}/{total} · {wait_s:.0f}s 后开始下一次",
-        "en": "time series · {done}/{total} done · next in {wait_s:.0f}s",
+        "zh": "时间序列 · 已完成 {done}/{total} · {wait_s:.0f} s 后开始下一次",
+        "en": "time series · {done}/{total} done · next in {wait_s:.0f} s",
     },
     "status.timeseries_progress": {
         "zh": "时间序列 · 第 {idx}/{total} 次",
@@ -63,10 +64,10 @@ _DICT: dict[str, dict[str, str]] = {
     },
 
     # ── 控制面板 ────────────────────────────────────────
-    "panel.devices": {"zh": "1 设备", "en": "1 Devices"},
-    "panel.stage": {"zh": "2 位移台", "en": "2 Stage"},
-    "panel.scan_plan": {"zh": "3 扫描计划", "en": "3 Scan plan"},
-    "panel.metadata": {"zh": "4 元数据", "en": "4 Metadata"},
+    "panel.devices": {"zh": "设备", "en": "Devices"},
+    "panel.stage": {"zh": "位移台", "en": "Stage"},
+    "panel.scan_plan": {"zh": "扫描计划", "en": "Scan plan"},
+    "panel.metadata": {"zh": "元数据", "en": "Metadata"},
     "panel.meta_sample": {"zh": "样品", "en": "sample"},
     "panel.meta_objective": {"zh": "物镜", "en": "objective"},
     "panel.meta_na": {"zh": "NA", "en": "NA"},
@@ -88,7 +89,7 @@ _DICT: dict[str, dict[str, str]] = {
     "panel.home": {"zh": "归零", "en": "home"},
     "panel.limits": {"zh": "限位…", "en": "limits…"},
     "panel.z_start": {"zh": "z 起", "en": "z start"},
-    "panel.z_stop": {"zh": "z 止", "en": "stop"},
+    "panel.z_stop": {"zh": "z 止", "en": "z stop"},
     "panel.z_step": {"zh": "步长", "en": "step"},
     "panel.dwell": {"zh": "停顿", "en": "dwell"},
     "panel.avg": {"zh": "平均", "en": "avg"},
@@ -99,6 +100,10 @@ _DICT: dict[str, dict[str, str]] = {
     "panel.stop": {"zh": "停止", "en": "stop"},
     "panel.x_start": {"zh": "x 起", "en": "x start"},
     "panel.y_start": {"zh": "y 起", "en": "y start"},
+    "panel.x_stop": {"zh": "x 止", "en": "x stop"},
+    "panel.x_step": {"zh": "x 步长", "en": "x step"},
+    "panel.y_stop": {"zh": "y 止", "en": "y stop"},
+    "panel.y_step": {"zh": "y 步长", "en": "y step"},
     "panel.offline": {"zh": "未连接", "en": "offline"},
     "panel.online": {"zh": "在线", "en": "online"},
     "panel.ready_connect": {"zh": "就绪 · 连接设备", "en": "ready · connect devices"},
@@ -108,9 +113,9 @@ _DICT: dict[str, dict[str, str]] = {
 
     # ── 工作流引导 (顶部四步) ──────────────────────────
     "workflow.step1": {"zh": "① 连接设备", "en": "① CONNECT"},
-    "workflow.step2": {"zh": "② 选扫描范围", "en": "② PLAN"},
+    "workflow.step2": {"zh": "② 设定计划", "en": "② PLAN"},
     "workflow.step3": {"zh": "③ 开始扫描", "en": "③ SCAN"},
-    "workflow.step4": {"zh": "④ 结果导出", "en": "④ EXPORT"},
+    "workflow.step4": {"zh": "④ 导出结果", "en": "④ EXPORT"},
 
     # ── 控件 tooltip (鼠标悬停说明; 新手向) ────────────
     "tip.connect": {
@@ -132,6 +137,10 @@ _DICT: dict[str, dict[str, str]] = {
     "tip.move": {
         "zh": "移动到目标坐标 · 受软限位与大幅移动确认保护",
         "en": "Move to target · guarded by soft limits and large-move confirm",
+    },
+    "tip.sharpness_trend": {
+        "zh": "近 60 帧 Brenner 锐度走势(右侧为最新)",
+        "en": "Brenner sharpness over recent 60 frames (newest at right)",
     },
     "tip.home": {
         "zh": "回到用户视角 (0, 0, 0) · 未参考时禁用 (绝对零点不可信)",
@@ -164,11 +173,11 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Frames averaged per z point · higher = less noise, slower",
     },
     "tip.repeat_count": {
-        "zh": "时间序列: 同一扫描重复 N 次, 文件名自动 _t00.._tNN. 设 1 = 单次。",
+        "zh": "时间序列: 同一扫描重复 N 次, 文件名自动加 _t00.._tNN 后缀, 设 1 = 单次。",
         "en": "Time series: repeat the same scan N times, files auto-suffixed _t00.._tNN. 1 = single scan.",
     },
     "tip.repeat_interval": {
-        "zh": "相邻两次扫描的开始间隔 (分钟). 0 = 上次保存完立即开始下一次。",
+        "zh": "相邻两次扫描的开始间隔 (分钟), 0 = 上次保存完立即开始下一次。",
         "en": "Wall-clock interval between consecutive scan starts (minutes). 0 = start next immediately after save.",
     },
     "tip.start_scan": {
@@ -192,7 +201,7 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Gamma (γ) · display / record only, raw PSF stays linear",
     },
     "tip.black_level": {
-        "zh": "黑阶 (sensor offset) · 用 dark frame 校正前的硬件抬底",
+        "zh": "黑阶 (sensor offset) · 减暗场之前的硬件偏移基线",
         "en": "Black level (sensor offset) · hardware floor before dark-frame",
     },
     "tip.frame_rate": {
@@ -208,7 +217,7 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Save current frame as TIFF + colored PNG (current colormap)",
     },
     "tip.record": {
-        "zh": "录像 · 按当前帧率写盘到数据目录",
+        "zh": "录像 · 按当前帧率保存到数据目录",
         "en": "Record live video to current data folder",
     },
     "tip.colormap": {
@@ -220,7 +229,7 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Expand advanced camera params (gamma / black / fps / pixel)",
     },
     "tip.estop": {
-        "zh": "急停 · 立刻停 stage + 取消扫描 (Esc / Space 通用)",
+        "zh": "急停 · 立刻停位移台 + 取消扫描 (Esc / Space 通用)",
         "en": "E-STOP · halt stage + cancel scan (Esc / Space global)",
     },
     "tip.jog_step": {
@@ -272,24 +281,24 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Add an xy raster at each z (3D dataset; slower but complete)",
     },
     "tip.meta_sample": {
-        "zh": "样品名 — 写入 meta.json,扫描后落盘",
-        "en": "Sample name — written to meta.json after scan",
+        "zh": "样品名 · 写入 meta.json, 扫描后保存",
+        "en": "Sample name · written to meta.json after scan",
     },
     "tip.meta_objective": {
-        "zh": "物镜型号 (例如 Nikon CFI Plan 100×) — 写入 meta.json",
-        "en": "Objective model (e.g. Nikon CFI Plan 100×) — meta.json",
+        "zh": "物镜型号 (例如 Nikon CFI Plan 100×) · 写入 meta.json",
+        "en": "Objective model (e.g. Nikon CFI Plan 100×) · meta.json",
     },
     "tip.meta_na": {
-        "zh": "物镜数值孔径 NA — 用于计算 Nyquist 步长 λ/(4·NA²)",
-        "en": "Numerical aperture NA — drives Nyquist step λ/(4·NA²)",
+        "zh": "物镜数值孔径 NA · 用于计算 Nyquist 步长 λ/(4·NA²)",
+        "en": "Numerical aperture NA · drives Nyquist step λ/(4·NA²)",
     },
     "tip.meta_lambda": {
-        "zh": "光源波长 (nm) — 用于计算理论 PSF 与 Nyquist 步长",
-        "en": "Wavelength (nm) — used for theoretical PSF & Nyquist step",
+        "zh": "光源波长 (nm) · 用于计算理论 PSF 与 Nyquist 步长",
+        "en": "Wavelength (nm) · used for theoretical PSF & Nyquist step",
     },
     "tip.meta_note": {
-        "zh": "自由备注 — 写入 meta.json,在历史 stack 中可查",
-        "en": "Free-form note — written to meta.json with this scan",
+        "zh": "自由备注 · 写入 meta.json, 在历史 stack 中可查",
+        "en": "Free-form note · written to meta.json with this scan",
     },
     "tip.scan_repeat": {
         "zh": "时间序列: 重复次数 (1 表示单次扫描)",
@@ -308,8 +317,8 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Line tool: drag a line on the image to plot intensity + FWHM fit",
     },
     "tip.settings_lang": {
-        "zh": "界面语言 (中/英) — 切换后需重启生效",
-        "en": "UI language (zh/en) — restart required",
+        "zh": "界面语言 (中/英) · 切换后需重启生效",
+        "en": "UI language (zh/en) · restart required",
     },
     "tip.settings_safety_enable": {
         "zh": "总开关: 取消勾选只关闭 safety/* 软限位；驱动层行程检查仍会生效",
@@ -332,7 +341,7 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Negate target value before dispatch (use for inverted mount)",
     },
     "tip.settings_gamma_enable": {
-        "zh": "勾选才允许高级 bar 的 γ 控件 (默认关, PSF 数据始终线性)",
+        "zh": "勾选才允许高级栏的 γ 控件 (默认关, PSF 数据始终线性)",
         "en": "Enable γ control in advanced bar (off by default; raw PSF stays linear)",
     },
     "tip.pixel_calibration_enable": {
@@ -376,8 +385,8 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "Open PI connection params (controller / interface / limits / speed)",
     },
     "tip.settings_ref": {
-        "zh": "执行 PI 物理寻参 — 危险, 会动 stage, 通常不必",
-        "en": "Trigger physical PI referencing — dangerous, stage moves, rarely needed",
+        "zh": "执行 PI 物理寻参 · 危险, 会动位移台, 通常不必",
+        "en": "Trigger physical PI referencing · dangerous, stage moves, rarely needed",
     },
     "tip.pi_native_dlg": {
         "zh": "调用 PI 官方 InterfaceSetupDlg 选择设备 (需要 pipython[gui])",
@@ -401,7 +410,7 @@ _DICT: dict[str, dict[str, str]] = {
     "camera.saturated": {"zh": "饱和", "en": "SATURATED"},
     "camera.no_signal": {"zh": "无信号 · 连接相机", "en": "NO SIGNAL · connect camera"},
     "camera.no_signal_hint": {
-        "zh": "点 [连接] 按钮开始 · 设置→设备 也可配 PI 控制器",
+        "zh": "点 [连接] 按钮开始 · 设置 → 位移台 也可配 PI 控制器",
         "en": "click [connect] to start · configure PI in Settings → Stage",
     },
     "camera.waiting_frame": {"zh": "等待画面", "en": "WAITING FOR FRAME"},
@@ -411,7 +420,7 @@ _DICT: dict[str, dict[str, str]] = {
     },
     "camera.image_dims": {"zh": "画幅 {w}×{h}", "en": "image {w}×{h}"},
     "camera.peak_val": {"zh": "峰值 {val}", "en": "peak {val}"},
-    "camera.fps_val": {"zh": "{fps} fps", "en": "{fps} fps"},
+    "camera.fps_val": {"zh": "{fps:.1f} fps", "en": "{fps:.1f} fps"},
 
     # ── PSF 视图 ────────────────────────────────────────
     "psf.view_section": {"zh": "视图", "en": "View"},
@@ -455,6 +464,7 @@ _DICT: dict[str, dict[str, str]] = {
     "stage.y": {"zh": "y", "en": "y"},
     "stage.z": {"zh": "z", "en": "z"},
     "stage.current_pos": {"zh": "当前位置", "en": "current pos"},
+    "stage.trail": {"zh": "近期轨迹", "en": "trail"},
     "stage.sampled": {"zh": "已采", "en": "sampled"},
     "stage.planned": {"zh": "计划", "en": "planned"},
     "stage.soft_limit": {"zh": "软限位", "en": "soft limit"},
@@ -473,6 +483,13 @@ _DICT: dict[str, dict[str, str]] = {
     "settings.tab_data": {"zh": "数据", "en": "Data"},
     "settings.language": {"zh": "界面语言", "en": "Language"},
     "settings.language_hint": {"zh": "切换语言需要重启应用生效", "en": "Restart required after switching"},
+    "settings.timeseries_section": {"zh": "时间序列扫描", "en": "Time-series scan"},
+    "settings.timeseries_repeat": {"zh": "重复次数", "en": "Repeat count"},
+    "settings.timeseries_interval": {"zh": "间隔 (分钟)", "en": "Interval (min)"},
+    "settings.timeseries_hint": {
+        "zh": "重复次数 > 1 时,每完成一轮扫描后,等待间隔再开始下一轮。",
+        "en": "If repeat > 1, the scan waits the interval between each run.",
+    },
     "settings.safety_section": {"zh": "软限位 (防止撞镜头)", "en": "Soft Limits (anti-collision)"},
     "settings.safety_enable": {"zh": "启用软限位", "en": "Enable soft limits"},
     "settings.safety_disable_warning": {
@@ -525,8 +542,14 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "已保存画线: {px:.3f} px = {um:.3f} µm, 换算 {scale:.6f} µm/px",
         "en": "Saved line: {px:.3f} px = {um:.3f} µm, scale {scale:.6f} µm/px",
     },
-    "pixel_calibration.line_too_short": {"zh": "画线长度太短，无法标定。", "en": "Line is too short to calibrate."},
-    "pixel_calibration.no_settings": {"zh": "设置尚未绑定，无法写入标定。", "en": "Settings are not bound; cannot save calibration."},
+    "pixel_calibration.line_too_short": {
+        "zh": "画线太短, 无法用作标定参考 · 请重新拖一条更长的线段。",
+        "en": "Line too short to use as a reference · drag a longer segment.",
+    },
+    "pixel_calibration.no_settings": {
+        "zh": "当前会话未就绪, 无法写入标定 · 请关闭对话框后重试。",
+        "en": "Session not ready · close this dialog and try again.",
+    },
     "pixel_calibration.line_applied": {
         "zh": "画线标定已写入: {px:.3f} px = {um:.3f} µm",
         "en": "Line calibration saved: {px:.3f} px = {um:.3f} µm",
@@ -674,31 +697,31 @@ _DICT: dict[str, dict[str, str]] = {
 
     # ── 错误 / 安全 ────────────────────────────────────
     "safety.move_refused": {
-        "zh": "移动被软限位拒绝: 硬件 {axis}={value:.2f} µm 超出 [{lo:.2f}, {hi:.2f}].",
-        "en": "Move refused by soft limit: hw {axis}={value:.2f} µm outside [{lo:.2f}, {hi:.2f}].",
+        "zh": "移动被软限位拒绝 · 硬件 {axis}={value:.2f} µm 超出允许范围 [{lo:.2f}, {hi:.2f}]。可在设置中放宽限位, 或把目标收回范围内。",
+        "en": "Move refused by soft limit · hw {axis}={value:.2f} µm is outside [{lo:.2f}, {hi:.2f}]. Widen the limit in Settings, or pull the target back into range.",
     },
     "safety.scan_refused": {
-        "zh": "扫描路径越过软限位: 硬件 {axis} 上有点 {value:.2f} µm 超出 [{lo:.2f}, {hi:.2f}]. 请收小范围或在设置里调高限位.",
-        "en": "Scan path violates soft limit: hw {axis} contains {value:.2f} µm outside [{lo:.2f}, {hi:.2f}]. Tighten the range or raise the limit in Settings.",
+        "zh": "扫描路径越过软限位 · 硬件 {axis} 上有点 {value:.2f} µm 超出 [{lo:.2f}, {hi:.2f}]。请收小扫描范围, 或在设置里放宽限位。",
+        "en": "Scan path violates soft limit · hw {axis} contains {value:.2f} µm outside [{lo:.2f}, {hi:.2f}]. Tighten the scan range, or raise the limit in Settings.",
     },
     "safety.range_refused": {
-        "zh": "目标超出位移台行程: 硬件 z={value:.2f} µm 超出 [{lo:.2f}, {hi:.2f}] µm. 请先标定行程或收小目标.",
-        "en": "Target outside stage travel: hw z={value:.2f} µm outside [{lo:.2f}, {hi:.2f}] µm. Calibrate travel or shrink target first.",
+        "zh": "目标超出位移台行程 · 硬件 z={value:.2f} µm 超出 [{lo:.2f}, {hi:.2f}] µm。请先标定行程, 或收小目标。",
+        "en": "Target outside stage travel · hw z={value:.2f} µm outside [{lo:.2f}, {hi:.2f}] µm. Calibrate travel, or shrink the target first.",
     },
     "safety.start_illegal_limits": {
-        "zh": "拒绝移动: 当前硬件 {axis}={value:.2f} µm 已在软限位 [{lo:.2f}, {hi:.2f}] 范围外。请检查位移台实际位置, 或在设置中放宽软限位后再试。",
-        "en": "Move refused: current hw {axis}={value:.2f} µm is already outside soft limit [{lo:.2f}, {hi:.2f}]. Verify stage position, or widen the limit in Settings.",
+        "zh": "移动被拒绝 · 当前硬件 {axis}={value:.2f} µm 已落在软限位 [{lo:.2f}, {hi:.2f}] 之外。请确认位移台实际位置, 或在设置中放宽软限位后再试。",
+        "en": "Move refused · current hw {axis}={value:.2f} µm is already outside soft limit [{lo:.2f}, {hi:.2f}]. Verify the stage position, or widen the limit in Settings.",
     },
     "safety.start_illegal_range": {
-        "zh": "拒绝移动: 当前硬件 z={value:.2f} µm 已在位移台行程 [{lo:.2f}, {hi:.2f}] µm 范围外。请先标定行程, 或手动将 stage 移回安全位置。",
-        "en": "Move refused: current hw z={value:.2f} µm is already outside stage travel range [{lo:.2f}, {hi:.2f}] µm. Calibrate the travel range or manually move the stage back into range.",
+        "zh": "移动被拒绝 · 当前硬件 z={value:.2f} µm 已落在位移台行程 [{lo:.2f}, {hi:.2f}] µm 之外。请先标定行程, 或手动把位移台移回范围内。",
+        "en": "Move refused · current hw z={value:.2f} µm is already outside stage travel range [{lo:.2f}, {hi:.2f}] µm. Calibrate the travel range, or manually move the stage back into range.",
     },
     "safety.hw_frame_hint": {
         "zh": "以下数值使用硬件坐标 (controller 原始读数), 不随归零 / 重设范围变化。当前位移台位置超出此范围时, 所有移动操作均被拒绝。",
         "en": "Values are in hardware (controller raw) coordinates and do not shift with zero/reset-range. Moves are refused while the stage sits outside this range.",
     },
     "exit.title": {"zh": "退出 PSF Scan", "en": "Exit PSF Scan"},
-    "exit.busy_prefix": {"zh": "退出前要做:", "en": "Before exit:"},
+    "exit.busy_prefix": {"zh": "退出前请处理:", "en": "Before exit:"},
     "exit.confirm": {"zh": "确定退出?", "en": "Confirm exit?"},
     "exit.scanning": {"zh": "扫描进行中", "en": "scan in progress"},
     "exit.recording": {"zh": "录像进行中", "en": "recording in progress"},
@@ -750,11 +773,11 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "✓ done · peak @ z={z:.2f} µm · score={score:.1f}",
     },
     "autofocus.status_low_light": {
-        "zh": "完成，但亮度不足 · 峰 @ z={z:.2f} µm · score={score:.1f}",
+        "zh": "完成, 但亮度不足 · 峰 @ z={z:.2f} µm · score={score:.1f}",
         "en": "done, but low light · peak @ z={z:.2f} µm · score={score:.1f}",
     },
     "autofocus.status_saturated": {
-        "zh": "完成，但画面饱和 · 峰 @ z={z:.2f} µm · score={score:.1f}",
+        "zh": "完成, 但画面饱和 · 峰 @ z={z:.2f} µm · score={score:.1f}",
         "en": "done, but saturated · peak @ z={z:.2f} µm · score={score:.1f}",
     },
     "autofocus.refused_disabled": {
@@ -774,28 +797,28 @@ _DICT: dict[str, dict[str, str]] = {
         "en": "autofocus done · peak @ z={z:.2f} µm · stage settled at peak",
     },
     "autofocus.low_light_warning": {
-        "zh": "自动对焦完成，但画面亮度不足：锐度曲线可能主要受噪声影响。请增加照明或曝光后重新对焦。",
+        "zh": "自动对焦完成, 但画面亮度不足 · 锐度曲线可能主要受噪声影响。请增加照明或曝光后重新对焦。",
         "en": "Autofocus finished, but the image is too dim. The sharpness curve may be noise-dominated. Increase illumination or exposure and refocus.",
     },
     "autofocus.low_light_status": {
-        "zh": "自动对焦亮度不足：请增加照明或曝光后复测",
-        "en": "Autofocus low light: increase illumination or exposure and retry",
+        "zh": "自动对焦亮度不足 · 请增加照明或曝光后复测",
+        "en": "Autofocus low light · increase illumination or exposure and retry",
     },
     "autofocus.saturated_warning": {
-        "zh": "自动对焦完成，但画面已接近满量程或出现饱和像素：锐度曲线可能被截顶影响。请降低曝光、增益或光源强度后重新对焦。",
+        "zh": "自动对焦完成, 但画面接近满量程或出现饱和像素 · 锐度曲线可能被截顶影响。请降低曝光、增益或光源强度后重新对焦。",
         "en": "Autofocus finished, but the image is near full scale or saturated. The sharpness curve may be clipped. Reduce exposure, gain, or illumination and refocus.",
     },
     "autofocus.saturated_status": {
-        "zh": "自动对焦画面饱和：请降低曝光、增益或光源强度后复测",
-        "en": "Autofocus saturated: reduce exposure, gain, or illumination and retry",
+        "zh": "自动对焦画面饱和 · 请降低曝光、增益或光源强度后复测",
+        "en": "Autofocus saturated · reduce exposure, gain, or illumination and retry",
     },
-    "autofocus.canceled": {"zh": "自动对焦已取消，位移台停在中断位置", "en": "autofocus canceled, stage at interrupt point"},
+    "autofocus.canceled": {"zh": "自动对焦已取消 · 位移台停在中断时的位置", "en": "autofocus canceled · stage stopped at the interrupt point"},
 
     # ── 启动恢复 (C.4) ─────────────────────────────────
     "recovery.title": {"zh": "发现未完成的扫描", "en": "Unfinished scans detected"},
     "recovery.found": {
-        "zh": "在数据目录里检测到 {n} 个目录有 stack.h5 但没 meta.json (可能是上次崩溃 / 强退留下的):",
-        "en": "Found {n} folder(s) with stack.h5 but no meta.json (likely from a previous crash / forced exit):",
+        "zh": "数据目录里有 {n} 个文件夹包含 stack.h5 但没有 meta.json, 可能是上次崩溃或强制退出留下的:",
+        "en": "Found {n} folder(s) with stack.h5 but no meta.json, likely from a previous crash or forced exit:",
     },
     "recovery.hint": {
         "zh": "这些 stack.h5 仍然可以用 h5py / Matlab 直接打开看已经采集的帧. 若不需要可手动删目录.",
@@ -828,8 +851,8 @@ _DICT: dict[str, dict[str, str]] = {
     "phase.view": {"zh": "视图", "en": "view"},
     "phase.load_sample": {"zh": "导入样品图", "en": "Load sample"},
     "phase.load_reference": {"zh": "导入参考图", "en": "Load reference"},
-    "phase.live_sample": {"zh": "当前帧→样品", "en": "Live → sample"},
-    "phase.live_reference": {"zh": "当前帧→参考", "en": "Live → reference"},
+    "phase.live_sample": {"zh": "当前帧 → 样品", "en": "Live → sample"},
+    "phase.live_reference": {"zh": "当前帧 → 参考", "en": "Live → reference"},
     "phase.reference_correction": {"zh": "参考矫正", "en": "reference correction"},
     "phase.auto_sideband": {"zh": "自动旁瓣", "en": "auto sideband"},
     "phase.unwrap": {"zh": "导出展开", "en": "unwrap export"},
@@ -873,9 +896,12 @@ _DICT: dict[str, dict[str, str]] = {
     "phase.no_live_frame": {"zh": "当前没有可用相机帧。请先连接相机并等待画面。", "en": "No live frame available. Connect camera and wait for an image."},
     "phase.need_sample": {"zh": "请先导入样品干涉图或取当前帧作为样品。", "en": "Load a sample interferogram first."},
     "phase.need_reference": {"zh": "已启用参考矫正，请先导入无样品参考图。", "en": "Reference correction is enabled. Load a reference interferogram first."},
-    "phase.process_failed": {"zh": "相位处理失败: {msg}", "en": "Phase processing failed: {msg}"},
-    "phase.save_failed": {"zh": "相位结果保存失败: {msg}", "en": "Failed to save phase result: {msg}"},
-    "phase.nothing_to_save": {"zh": "还没有相位结果可保存。", "en": "No phase result to save."},
+    "phase.process_failed": {"zh": "相位处理失败 · {msg}", "en": "Phase processing failed · {msg}"},
+    "phase.save_failed": {"zh": "相位结果保存失败 · {msg}", "en": "Failed to save phase result · {msg}"},
+    "phase.nothing_to_save": {
+        "zh": "还没有可保存的相位结果 · 先点击处理生成相位图。",
+        "en": "No phase result to save · click Process first to generate one.",
+    },
     "phase.saved": {"zh": "已保存 · {name}", "en": "saved · {name}"},
     "phase.status_result": {
         "zh": "旁瓣 x={x:.1f} y={y:.1f} r={r:.1f}",

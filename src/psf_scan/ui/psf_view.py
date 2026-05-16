@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..core.i18n import tr
@@ -15,13 +15,18 @@ from .psf_render import (
 )
 from .settings import UserSettings
 
+# Live 扫描下的 2D 渲染合并间隔——避免每收一帧就完整 nanmin/nanmax + MIP
+# 三次 reduce。150ms ≈ 6 Hz,人眼足够流畅,CPU 占用与原来差一个量级。
+_LIVE_RENDER_DEBOUNCE_MS = 150
+
 
 class PSFView(QWidget):
     export_plot_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setStyleSheet(f"background:{theme.BG0};")
+        self.setObjectName("PSFView")
+        self.setStyleSheet(f"QWidget#PSFView{{background:{theme.BG0};}}")
         self._stack: np.ndarray | None = None
         self._frame_count = 0
         self._positions: np.ndarray | None = None
@@ -29,6 +34,7 @@ class PSFView(QWidget):
         self._volume: np.ndarray | None = None
         self._live = False
         self._render_pending = False
+        self._running_levels: tuple[float, float] | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -42,6 +48,11 @@ class PSFView(QWidget):
         self._controls.export_plot_requested.connect(self.export_plot_requested.emit)
         layout.addWidget(self._plot, stretch=1)
         layout.addWidget(self._controls)
+
+        self._live_refresh = QTimer(self)
+        self._live_refresh.setSingleShot(True)
+        self._live_refresh.setInterval(_LIVE_RENDER_DEBOUNCE_MS)
+        self._live_refresh.timeout.connect(self._refresh_render)
 
     def export_plot_to(self, path: str) -> None:
         """由 app.py 在弹出 QFileDialog 选好路径后调用。"""
@@ -60,6 +71,8 @@ class PSFView(QWidget):
         self._path_positions = np.array(positions, copy=True)
         self._volume = None
         self._render_pending = False
+        self._running_levels = None
+        self._live_refresh.stop()
         self._plot.clear()
         self._set_empty(tr("scan.scanning_status"))
 
@@ -69,6 +82,14 @@ class PSFView(QWidget):
         self._ensure_stack(frame)
         self._stack[idx] = frame
         self._frame_count += 1
+        # 用单帧的 min/max 增量更新整套 levels，避免对增长中的 stack 做全量扫。
+        f_lo = float(np.nanmin(frame))
+        f_hi = float(np.nanmax(frame))
+        if self._running_levels is None:
+            self._running_levels = (f_lo, f_hi)
+        else:
+            lo, hi = self._running_levels
+            self._running_levels = (min(lo, f_lo), max(hi, f_hi))
         self._set_stack(self._stack[: self._frame_count], self._positions[: idx + 1], live=True)
 
     def set_data(self, frames: np.ndarray, positions: np.ndarray) -> None:
@@ -76,6 +97,11 @@ class PSFView(QWidget):
         self._frame_count = len(self._stack)
         self._positions = np.array(positions, copy=True)
         self._path_positions = np.array(positions, copy=True)
+        # 扫描结束态: 一次性算出准确 levels,后续 _render 直接用 hint 不再扫体。
+        self._running_levels = (
+            float(np.nanmin(self._stack)),
+            float(np.nanmax(self._stack)),
+        )
         self._set_stack(self._stack, self._positions, live=False)
 
     def _set_stack(self, frames: np.ndarray, positions: np.ndarray, *, live: bool = False) -> None:
@@ -86,6 +112,11 @@ class PSFView(QWidget):
         if live and not self.isVisible():
             self._render_pending = True
             return
+        if live:
+            # Live 帧合并: 不要每帧都重渲染,等 _LIVE_RENDER_DEBOUNCE_MS 静默窗口。
+            self._live_refresh.start()
+            return
+        self._live_refresh.stop()
         self._refresh_render()
 
     def _ensure_stack(self, frame: np.ndarray) -> None:
@@ -99,7 +130,10 @@ class PSFView(QWidget):
     def _sync_auto_levels(self) -> None:
         if self._volume is None or not self._controls.auto.isChecked():
             return
-        lo, hi = float(np.nanmin(self._volume)), float(np.nanmax(self._volume))
+        if self._running_levels is not None:
+            lo, hi = self._running_levels
+        else:
+            lo, hi = float(np.nanmin(self._volume)), float(np.nanmax(self._volume))
         self._controls.set_levels(lo, hi)
 
     def _refresh_render(self) -> None:
@@ -112,7 +146,7 @@ class PSFView(QWidget):
             return
         try:
             options = self._options()
-            levels = resolve_levels(self._volume, options)
+            levels = resolve_levels(self._volume, options, hint=self._running_levels)
             self._render_plot(levels, options)
             self._update_info()
         except Exception as exc:  # noqa: BLE001

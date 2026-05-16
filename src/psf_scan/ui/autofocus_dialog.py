@@ -1,10 +1,14 @@
-"""Autofocus 进度对话框 — 显示 z 扫描与细化阶段的 Brenner 锐度曲线。"""
+"""Autofocus 进度对话框 — 显示 z 扫描与细化阶段的 Brenner 锐度曲线。
+
+非模态 + 锚定主窗口右侧 (control panel 区), 不遮挡相机视图。
+"""
 
 from __future__ import annotations
 
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QShowEvent
 from PySide6.QtWidgets import (
     QDialog, QHBoxLayout, QLabel, QProgressBar, QPushButton, QVBoxLayout,
 )
@@ -20,16 +24,16 @@ class AutofocusDialog(QDialog):
 
     def __init__(self, total_points: int, z_range: tuple[float, float],
                  parent=None) -> None:
-        super().__init__(parent)
+        super().__init__(parent, Qt.Tool)
         self.setWindowTitle(tr("autofocus.title"))
         self.setModal(False)
-        self.resize(480, 320)
+        self.resize(360, 240)
         self.setStyleSheet(f"background:{theme.BG1};")
         self._total = max(1, int(total_points))
         self._finished = False
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(6)
+        layout.setContentsMargins(theme.G_8, theme.G_8, theme.G_8, theme.G_8)
+        layout.setSpacing(theme.G_4)
 
         self._lbl_range = QLabel(
             tr("autofocus.range_label", lo=z_range[0], hi=z_range[1], n=total_points)
@@ -95,6 +99,23 @@ class AutofocusDialog(QDialog):
             self.close()
             return
         self.cancel_requested.emit()
+
+    def showEvent(self, event: QShowEvent) -> None:
+        super().showEvent(event)
+        self._anchor_to_parent()
+
+    def _anchor_to_parent(self) -> None:
+        """把对话框锚到主窗口右上, 不遮挡相机视图 (相机在左 ~70%)。"""
+        parent = self.parent()
+        if parent is None:
+            return
+        geo = parent.geometry()
+        margin = theme.G_24
+        # 右上角内嵌; 横向距右 margin, 竖向预留菜单栏 + tab bar 高度
+        top_inset = 80
+        x = geo.x() + geo.width() - self.width() - margin
+        y = geo.y() + top_inset
+        self.move(max(0, x), max(0, y))
 
 
 def _done_status_key(*, low_light: bool, saturated: bool) -> str:

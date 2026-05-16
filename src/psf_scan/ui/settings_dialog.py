@@ -18,7 +18,7 @@ from PySide6.QtCore import QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
-    QFormLayout, QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
+    QFormLayout, QHBoxLayout, QLabel, QLineEdit, QMessageBox,
     QPushButton, QScrollArea, QSpinBox, QTabWidget, QVBoxLayout, QWidget,
 )
 
@@ -30,6 +30,7 @@ from ..core.safety import SafetyLimits
 from . import theme
 from .pi_connect_dialog import PIConnectDialog
 from .settings import UserSettings
+from .widgets import SectionHeader
 
 
 AUTOFOCUS_SAMPLE_MIN = 1
@@ -73,8 +74,12 @@ class SettingsDialog(QDialog):
     # ── 通用 ────────────────────────────────────────────
     def _tab_general(self) -> QWidget:
         w = QWidget()
-        form = QFormLayout(w)
-        form.setLabelAlignment(Qt.AlignRight)
+        layout = QVBoxLayout(w)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.G_8)
+
+        lang_form = QFormLayout()
+        lang_form.setLabelAlignment(Qt.AlignRight)
         self.cb_lang = QComboBox()
         self.cb_lang.setToolTip(tr("tip.settings_lang"))
         for code, label in SUPPORTED.items():
@@ -83,22 +88,50 @@ class SettingsDialog(QDialog):
         ix = self.cb_lang.findData(cur)
         if ix >= 0:
             self.cb_lang.setCurrentIndex(ix)
-        form.addRow(tr("settings.language"), self.cb_lang)
+        lang_form.addRow(tr("settings.language"), self.cb_lang)
         hint = QLabel(tr("settings.language_hint"))
         hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
-        form.addRow("", hint)
+        lang_form.addRow("", hint)
+        layout.addLayout(lang_form)
+
+        # 时间序列扫描 (从 ControlPanel 挪入,低频功能)
+        layout.addWidget(SectionHeader(tr("settings.timeseries_section")))
+        ts_form = QFormLayout()
+        ts_form.setLabelAlignment(Qt.AlignRight)
+        self.sp_repeat = QSpinBox()
+        self.sp_repeat.setRange(1, 1000)
+        self.sp_repeat.setValue(int(self._settings.value_int("scan/repeat_count", 1)))
+        self.sp_repeat.setToolTip(tr("tip.repeat_count"))
+        ts_form.addRow(tr("settings.timeseries_repeat"), self.sp_repeat)
+        self.sp_interval = QDoubleSpinBox()
+        self.sp_interval.setRange(0.0, 1440.0)
+        self.sp_interval.setDecimals(2)
+        self.sp_interval.setSingleStep(0.5)
+        self.sp_interval.setSuffix(" min")
+        self.sp_interval.setValue(float(self._settings.value_float("scan/repeat_interval_min", 0.0)))
+        self.sp_interval.setToolTip(tr("tip.repeat_interval"))
+        ts_form.addRow(tr("settings.timeseries_interval"), self.sp_interval)
+        ts_hint = QLabel(tr("settings.timeseries_hint"))
+        ts_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        ts_hint.setWordWrap(True)
+        ts_form.addRow("", ts_hint)
+        layout.addLayout(ts_form)
+        layout.addStretch()
         return w
 
     # ── 位移台 ──────────────────────────────────────────
     def _tab_stage(self) -> QWidget:
         w = QWidget()
         layout = QVBoxLayout(w)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.G_16)
 
         # 软限位
         limits = self._settings.safety_limits()
-        gb = QGroupBox(tr("settings.safety_section"))
-        gbl = QVBoxLayout(gb)
+        layout.addWidget(SectionHeader(tr("settings.safety_section")))
+        gbl = QVBoxLayout()
+        gbl.setContentsMargins(0, 0, 0, 0)
+        gbl.setSpacing(theme.G_8)
         self.chk_safety = QCheckBox(tr("settings.safety_enable"))
         self.chk_safety.setChecked(limits.enabled)
         self.chk_safety.setToolTip(tr("tip.settings_safety_enable"))
@@ -146,11 +179,13 @@ class SettingsDialog(QDialog):
         self.sp_large_move.setToolTip(tr("tip.settings_large_move"))
         form.addRow(tr("settings.large_move_threshold"), self.sp_large_move)
         gbl.addLayout(form)
-        layout.addWidget(gb)
+        layout.addLayout(gbl)
 
         # Autofocus (C.6)
-        gb_af = QGroupBox(tr("settings.autofocus_section"))
-        afl = QVBoxLayout(gb_af)
+        layout.addWidget(SectionHeader(tr("settings.autofocus_section")))
+        afl = QVBoxLayout()
+        afl.setContentsMargins(0, 0, 0, 0)
+        afl.setSpacing(theme.G_8)
         self.chk_af = QCheckBox(tr("settings.autofocus_enable"))
         self.chk_af.setChecked(self._settings.autofocus_enabled())
         self.chk_af.setToolTip(tr("tip.settings_autofocus_enable"))
@@ -172,21 +207,25 @@ class SettingsDialog(QDialog):
         self.sp_af_samples.setToolTip(tr("tip.settings_autofocus_samples"))
         af_form.addRow(tr("settings.autofocus_samples"), self.sp_af_samples)
         afl.addLayout(af_form)
-        layout.addWidget(gb_af)
+        layout.addLayout(afl)
 
         # PI 连接
-        gb_pi = QGroupBox(tr("settings.pi_section"))
-        pl = QHBoxLayout(gb_pi)
+        layout.addWidget(SectionHeader(tr("settings.pi_section")))
+        pl = QHBoxLayout()
+        pl.setContentsMargins(0, 0, 0, 0)
+        pl.setSpacing(theme.G_8)
         self.btn_pi = QPushButton(tr("settings.pi_open"))
         self.btn_pi.setToolTip(tr("tip.settings_pi_open"))
         self.btn_pi.clicked.connect(self._open_pi_dialog)
         pl.addWidget(self.btn_pi)
         pl.addStretch()
-        layout.addWidget(gb_pi)
+        layout.addLayout(pl)
 
         # 寻参 (危险, 藏在 settings 防止误触)
-        gb_ref = QGroupBox(tr("settings.reference_section"))
-        rfl = QVBoxLayout(gb_ref)
+        layout.addWidget(SectionHeader(tr("settings.reference_section")))
+        rfl = QVBoxLayout()
+        rfl.setContentsMargins(0, 0, 0, 0)
+        rfl.setSpacing(theme.G_8)
         ref_warn = QLabel(tr("settings.reference_warning"))
         ref_warn.setWordWrap(True)
         ref_warn.setStyleSheet(
@@ -199,12 +238,14 @@ class SettingsDialog(QDialog):
         self.btn_ref.setProperty("role", "danger")
         self.btn_ref.clicked.connect(self.reference_clicked.emit)
         rfl.addWidget(self.btn_ref)
-        layout.addWidget(gb_ref)
+        layout.addLayout(rfl)
 
         # 轴反转
         invert = self._settings.axis_inversion()
-        gb_axes = QGroupBox(tr("settings.axes_section"))
-        avl = QVBoxLayout(gb_axes)
+        layout.addWidget(SectionHeader(tr("settings.axes_section")))
+        avl = QVBoxLayout()
+        avl.setContentsMargins(0, 0, 0, 0)
+        avl.setSpacing(theme.G_8)
         row_inv = QHBoxLayout()
         self.chk_inv_x = QCheckBox(tr("settings.invert_x"))
         self.chk_inv_x.setChecked(invert[0])
@@ -219,11 +260,11 @@ class SettingsDialog(QDialog):
             row_inv.addWidget(c)
         row_inv.addStretch()
         avl.addLayout(row_inv)
-        hint = QLabel(tr("settings.axes_hint"))
-        hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
-        avl.addWidget(hint)
-        layout.addWidget(gb_axes)
+        axes_hint = QLabel(tr("settings.axes_hint"))
+        axes_hint.setWordWrap(True)
+        axes_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        avl.addWidget(axes_hint)
+        layout.addLayout(avl)
         layout.addStretch()
         return w
 
@@ -251,10 +292,13 @@ class SettingsDialog(QDialog):
         layout.addStretch()
         return w
 
-    def _pixel_calibration_group(self) -> QGroupBox:
+    def _pixel_calibration_group(self) -> QWidget:
         cfg = self._settings.pixel_calibration_config()
-        group = QGroupBox(tr("pixel_calibration.section"))
+        group = QWidget()
         layout = QVBoxLayout(group)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(theme.G_8)
+        layout.addWidget(SectionHeader(tr("pixel_calibration.section")))
         self.chk_pixel_calibration = QCheckBox(tr("pixel_calibration.enable"))
         self.chk_pixel_calibration.setChecked(bool(cfg["enabled"]))
         self.chk_pixel_calibration.setToolTip(tr("tip.pixel_calibration_enable"))
@@ -489,6 +533,9 @@ class SettingsDialog(QDialog):
         self._settings.set_autofocus_step_um(self.sp_af_step.value())
         self._settings.set_autofocus_dwell_ms(int(self.sp_af_dwell.value()))
         self._settings.set_autofocus_sample_count(int(self.sp_af_samples.value()))
+        # 时间序列扫描
+        self._settings.set_value("scan/repeat_count", int(self.sp_repeat.value()))
+        self._settings.set_value("scan/repeat_interval_min", float(self.sp_interval.value()))
         # 语言变更提示重启
         if new_lang != old_lang:
             QMessageBox.information(self, tr("settings.title"), tr("settings.language_hint"))

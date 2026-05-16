@@ -83,7 +83,7 @@ def main() -> None:  # noqa: C901
     _save(win, "main_idle")
 
     # 连接 mock + mock
-    win.control.connect_requested.emit("mock", "mock")
+    win.status_strip.connect_requested.emit("mock", "mock")
     _pump(app, 0.5)
 
     # ② 主窗口 — 已连接 (LIVE IMAGE 已经在跑帧)
@@ -106,7 +106,6 @@ def main() -> None:  # noqa: C901
 
     # ⑥ 跑一次小扫描 → 拿到 PSF Stack 真实数据后截图
     print("[6/9] psf_view (跑 mock 扫描中...)")
-    win.control.sp_repeat.setValue(1)
     win.control.sp_zs.setValue(-1.0)
     win.control.sp_ze.setValue(1.0)
     win.control.sp_zd.setValue(0.2)  # 11 个点
