@@ -87,6 +87,28 @@ class CameraBase(QObject):
     def get_pixel_format(self) -> str | None: return None
     def pixel_formats(self) -> tuple[str, ...]: return ()
 
+    # ── hardware dark-field compensation (optional) ──
+    # Drivers that expose an on-camera dark / non-uniformity correction node
+    # (e.g. Hikvision MVS ``NUCEnable``) override these. The orchestrator
+    # tries the SDK path first and falls back to ``core.calibration`` software
+    # subtraction when ``try_enable_hardware_dark`` returns False.
+    def try_enable_hardware_dark(self) -> bool:
+        """Engage on-camera dark-field correction. Return True iff active."""
+        return False
+
+    def disable_hardware_dark(self) -> None:
+        """Idempotent disengage; safe to call even if never engaged."""
+        return None
+
+    @property
+    def hardware_dark_active(self) -> bool:
+        return False
+
+    @property
+    def hardware_dark_node(self) -> str | None:
+        """Symbolic SDK node name used for compensation (for diagnostics)."""
+        return None
+
 
 AVAILABLE_CAMERAS = ["mvs", "mock", "mock-interference"]
 

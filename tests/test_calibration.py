@@ -70,6 +70,43 @@ def test_apply_dark_flat_calibration():
     np.testing.assert_allclose(corrected, np.full((2, 2), 50, dtype=np.float32))
 
 
+def test_apply_skips_software_dark_when_hardware_active():
+    """硬件接管后软件路径必须零减法 -- 即便 dark file 已加载."""
+    dark = _frame("dark", np.full((2, 2), 10, dtype=np.float32))
+    config = CalibrationConfig(
+        dark_enabled=True,
+        dark=dark,
+        hardware_dark_active=True,
+        hardware_dark_node="NUCEnable",
+    )
+    raw = np.full((2, 2), 60, dtype=np.float32)
+
+    corrected = apply_calibration(raw, config)
+
+    np.testing.assert_allclose(corrected, raw)
+
+
+def test_apply_flat_without_software_dark_when_hardware_active():
+    """硬件 dark + flat 时 denominator 不应再减 dark."""
+    dark = _frame("dark", np.full((2, 2), 10, dtype=np.float32))
+    flat = _frame("flat", np.full((2, 2), 100, dtype=np.float32))
+    config = CalibrationConfig(
+        dark_enabled=True,
+        flat_enabled=True,
+        flat_mode="intensity",
+        dark=dark,
+        flat=flat,
+        hardware_dark_active=True,
+        hardware_dark_node="NUCEnable",
+    )
+    raw = np.full((2, 2), 50, dtype=np.float32)
+
+    corrected = apply_calibration(raw, config)
+
+    # data / flat * mean(flat) = 50 / 100 * 100 = 50
+    np.testing.assert_allclose(corrected, np.full((2, 2), 50, dtype=np.float32))
+
+
 def test_validate_rejects_camera_mismatch():
     dark = _frame("dark", np.ones((2, 2), dtype=np.float32), exposure_us=2000)
     config = CalibrationConfig(dark_enabled=True, dark=dark)

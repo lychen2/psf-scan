@@ -41,6 +41,11 @@ class CalibrationConfig:
     flat_mode: str = "intensity"
     dark: CalibrationFrame | None = None
     flat: CalibrationFrame | None = None
+    # 由 app 层在引擎握手后注入: 相机已通过 SDK 接管暗场补偿时, 软件路径
+    # 必须跳过 ``data - dark`` (硬件已经在帧出相机前减好了), 同时也得绕开
+    # flat 分支里的 ``denominator = flat - dark`` -- 否则会双重减.
+    hardware_dark_active: bool = False
+    hardware_dark_node: str | None = None
 
     @property
     def enabled(self) -> bool:
@@ -56,6 +61,8 @@ class CalibrationConfig:
             "flat_mode": self.flat_mode,
             "dark": None if self.dark is None else self.dark.path_metadata,
             "flat": None if self.flat is None else self.flat.path_metadata,
+            "hardware_dark_active": self.hardware_dark_active,
+            "hardware_dark_node": self.hardware_dark_node,
         }
 
 
@@ -136,6 +143,17 @@ def validate_config(config: CalibrationConfig, camera: CameraBase) -> None:
 
 def apply_calibration(frame: np.ndarray, config: CalibrationConfig) -> np.ndarray:
     data = np.asarray(frame, dtype=np.float32)
+    # 硬件已接管暗场: 相机出来的 data / flat 都不含 dark 基线, 软件零减法.
+    if config.hardware_dark_active:
+        if config.flat_enabled:
+            if config.flat is None:
+                raise ValueError("已启用平场校正，但未加载平场文件")
+            if tuple(config.flat.data.shape) != tuple(data.shape):
+                raise ValueError("平场校正文件尺寸与当前帧不匹配")
+            denominator = config.flat.data
+            corrected = data / np.maximum(denominator, FLAT_EPS)
+            return corrected * float(np.mean(denominator))
+        return data
     dark = _dark_array(config, data.shape)
     if config.flat_enabled:
         if config.flat is None:

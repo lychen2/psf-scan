@@ -343,7 +343,9 @@ class MainWindow(QMainWindow):
             stage.connect()
             camera.connect()
             self._restore_camera_settings(camera)
-            self._calibration_config = config_from_settings(self._settings, camera)
+            self._calibration_config = self._engage_hardware_dark(
+                config_from_settings(self._settings, camera), camera=camera
+            )
             camera.start_streaming()
         except Exception as exc:  # noqa: BLE001
             _log.exception("stage.connect / camera.connect / start_streaming failed")
@@ -422,13 +424,46 @@ class MainWindow(QMainWindow):
             self._calibration_config = None
             return True
         try:
-            self._calibration_config = config_from_settings(self._settings, self._camera)
+            cfg = config_from_settings(self._settings, self._camera)
         except Exception as exc:  # noqa: BLE001
             self._calibration_config = None
+            # 软件路径失败也要把硬件路径关掉, 避免相机被遗留在 NUCEnable=True
+            try:
+                self._camera.disable_hardware_dark()
+            except Exception:  # noqa: BLE001
+                pass
             if show_errors:
                 QMessageBox.warning(self, tr("common.error"), tr("calibration.failed", msg=str(exc)))
             return False
+        self._calibration_config = self._engage_hardware_dark(cfg)
         return True
+
+    def _engage_hardware_dark(
+        self, cfg: CalibrationConfig, *, camera: CameraBase | None = None
+    ) -> CalibrationConfig:
+        """根据配置在相机端开/关硬件暗场, 把结果回填到 frozen 配置.
+
+        camera 显式传入用于 ``_on_connect`` 流程中 ``self._camera`` 尚未赋值的场景."""
+        from dataclasses import replace
+        cam = camera if camera is not None else self._camera
+        if cam is None:
+            return cfg
+        if not cfg.dark_enabled:
+            try:
+                cam.disable_hardware_dark()
+            except Exception:  # noqa: BLE001
+                pass
+            return replace(cfg, hardware_dark_active=False, hardware_dark_node=None)
+        try:
+            active = bool(cam.try_enable_hardware_dark())
+        except Exception:  # noqa: BLE001
+            active = False
+        node = cam.hardware_dark_node if active else None
+        if active:
+            _log.info("hardware dark-field engaged via SDK node %s", node)
+        else:
+            _log.info("hardware dark-field unavailable; software subtraction path active")
+        return replace(cfg, hardware_dark_active=active, hardware_dark_node=node)
 
     @Slot(int)
     def _on_exposure_changed(self, exposure_us: int) -> None:
@@ -469,6 +504,10 @@ class MainWindow(QMainWindow):
         if self._recorder.is_recording:
             self.cam_view.set_recording_state(False)
         if self._camera:
+            try:
+                self._camera.disable_hardware_dark()
+            except Exception:  # noqa: BLE001
+                pass
             self._unwire_preview_backpressure(self._camera)
             self._camera.disconnect()
             self._camera = None

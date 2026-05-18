@@ -131,6 +131,31 @@ def set_pixel_format_value(cam, symbolic: str) -> bool:
     return _ok(cam.MV_CC_SetEnumValueByString("PixelFormat", symbolic))
 
 
+# 海康 MVS 不同型号的暗场补偿节点名各异; 按优先级试一遍, 命中即用.
+# 直接 SetBoolValue(True) -- 节点存在且接受才返回 0, 否则视为不支持.
+_HARDWARE_DARK_NODES: tuple[str, ...] = (
+    "NUCEnable",                  # Non-Uniformity Correction (DSNU/PRNU)
+    "DarkFieldCorrectionEnable",  # 部分工业线相机
+    "DPCEnable",                  # Defective Pixel Correction (兜底)
+)
+
+
+def engage_hardware_dark(cam) -> str | None:
+    """逐个尝试启用相机内置暗场补偿; 返回命中的节点名, 全部失败时 None."""
+    for key in _HARDWARE_DARK_NODES:
+        if _ok(cam.MV_CC_SetBoolValue(key, True)):
+            return key
+    return None
+
+
+def disengage_hardware_dark(cam, node: str | None) -> None:
+    """关闭曾经启用的节点; node 为 None 时遍历全部已知节点静默关闭."""
+    keys = (node,) if node else _HARDWARE_DARK_NODES
+    for key in keys:
+        if key:
+            cam.MV_CC_SetBoolValue(key, False)
+
+
 # ── CameraBase 高级方法的 MVS Mixin ────────────────────────
 
 class MVSAdvancedMixin:
@@ -141,6 +166,7 @@ class MVSAdvancedMixin:
 
     _cam: object  # 类型提示：MvCamera
     _connected: bool
+    _hw_dark_node: str | None = None
 
     # gamma ─────────────────────────────
     def set_gamma(self, gamma: float) -> None:
@@ -209,3 +235,24 @@ class MVSAdvancedMixin:
             return ()
         _, options = pixel_format_state(self._cam)
         return tuple(options)
+
+    # hardware dark-field ────────────────
+    def try_enable_hardware_dark(self) -> bool:
+        if not self._connected:
+            return False
+        node = engage_hardware_dark(self._cam)
+        self._hw_dark_node = node
+        return node is not None
+
+    def disable_hardware_dark(self) -> None:
+        if self._connected:
+            disengage_hardware_dark(self._cam, self._hw_dark_node)
+        self._hw_dark_node = None
+
+    @property
+    def hardware_dark_active(self) -> bool:
+        return self._hw_dark_node is not None
+
+    @property
+    def hardware_dark_node(self) -> str | None:
+        return self._hw_dark_node
