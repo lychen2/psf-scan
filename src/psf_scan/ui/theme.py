@@ -71,14 +71,31 @@ PANEL_GUTTER = 24
 
 
 # ── 字体 (Tokens) ──────────────────────────────
-SIZE_SECTION = "13px"
-SIZE_VALUE = "14px"
-SIZE_BODY = "11px"
-SIZE_METER = "10px"
-SIZE_CONTROL = "12px"
+# 基础像素 (scale=1.0)。apply_theme() 会按 UI scale 重写下面的 SIZE_* 字符串
+# 以及 BASE_FONT_PT,所有 import theme 的模块拿到的就是已缩放值。
+_BASE_SIZE_PX = {
+    "SIZE_SECTION": 13,
+    "SIZE_VALUE": 14,
+    "SIZE_BODY": 11,
+    "SIZE_METER": 10,
+    "SIZE_CONTROL": 12,
+}
+_BASE_FONT_PT = 11
+
+SIZE_SECTION = f"{_BASE_SIZE_PX['SIZE_SECTION']}px"
+SIZE_VALUE = f"{_BASE_SIZE_PX['SIZE_VALUE']}px"
+SIZE_BODY = f"{_BASE_SIZE_PX['SIZE_BODY']}px"
+SIZE_METER = f"{_BASE_SIZE_PX['SIZE_METER']}px"
+SIZE_CONTROL = f"{_BASE_SIZE_PX['SIZE_CONTROL']}px"
+BASE_FONT_PT = _BASE_FONT_PT
+UI_SCALE = 1.0
 
 SANS = "sans-serif"
 MONO = "monospace"
+
+
+def _scaled_px(base_px: int, scale: float) -> int:
+    return max(8, int(round(base_px * scale)))
 
 
 def _font_family(*candidates: str, default: str) -> str:
@@ -89,8 +106,17 @@ def _font_family(*candidates: str, default: str) -> str:
     return default
 
 
-def apply_theme(app: QApplication) -> None:
+def apply_theme(app: QApplication, scale: float = 1.0) -> None:
     global SANS, MONO, _combo_enforcer
+    global SIZE_SECTION, SIZE_VALUE, SIZE_BODY, SIZE_METER, SIZE_CONTROL
+    global BASE_FONT_PT, UI_SCALE
+    UI_SCALE = float(scale)
+    SIZE_SECTION = f"{_scaled_px(_BASE_SIZE_PX['SIZE_SECTION'], UI_SCALE)}px"
+    SIZE_VALUE = f"{_scaled_px(_BASE_SIZE_PX['SIZE_VALUE'], UI_SCALE)}px"
+    SIZE_BODY = f"{_scaled_px(_BASE_SIZE_PX['SIZE_BODY'], UI_SCALE)}px"
+    SIZE_METER = f"{_scaled_px(_BASE_SIZE_PX['SIZE_METER'], UI_SCALE)}px"
+    SIZE_CONTROL = f"{_scaled_px(_BASE_SIZE_PX['SIZE_CONTROL'], UI_SCALE)}px"
+    BASE_FONT_PT = max(8, int(round(_BASE_FONT_PT * UI_SCALE)))
     if "Fusion" in QStyleFactory.keys():
         app.setStyle(QStyleFactory.create("Fusion"))
     if _combo_enforcer is None:
@@ -121,7 +147,7 @@ def apply_theme(app: QApplication) -> None:
         "Iosevka Term", "JetBrains Mono", "Cascadia Mono", "Fira Code",
         "DejaVu Sans Mono", "Menlo", "Consolas", default="monospace",
     )
-    app.setFont(QFont(SANS, 11))
+    app.setFont(QFont(SANS, BASE_FONT_PT))
     pg.setConfigOptions(background=BG0, foreground=TEXT2, antialias=True)
     qss = QSS_TEMPLATE.format(
         BG0=BG0, BG1=BG1, BG2=BG2,

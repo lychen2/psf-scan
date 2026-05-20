@@ -290,9 +290,6 @@ class StatusStrip(QWidget):
             f"font-size:{theme.SIZE_METER};font-weight:{weight};letter-spacing:0.4px;"
         )
 
-    def set_plan(self, _text: str) -> None:  # API 兼容,新版状态栏不显示 plan
-        pass
-
     def set_data_dir(self, _path: str) -> None:  # API 兼容,数据目录入口已移到 ⚙
         pass
 

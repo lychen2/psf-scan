@@ -54,7 +54,7 @@ class PIConnectDialog(QDialog):
         info.setStyleSheet(
             f"QTextEdit{{background:{theme.BG1};color:{theme.TEXT1};"
             f"border:1px solid {theme.BORDER0};padding:6px;"
-            "font-family:'Iosevka Term',monospace;font-size:10px;}"
+            f"font-family:'Iosevka Term',monospace;font-size:{theme.SIZE_METER};}}"
         )
         layout.addWidget(info)
 
@@ -71,7 +71,7 @@ class PIConnectDialog(QDialog):
         self.cb_refmode = fixed_combo(REFMODES, str(p.get("refmode", "FRF")).upper())
         self.cb_referencing = fixed_combo(REFERENCING, str(p.get("referencing", "skip")))
         self.lbl_ref_hint = QLabel(tr(REF_HINT_KEYS[self.cb_referencing.currentText()]))
-        self.lbl_ref_hint.setStyleSheet(f"color:{theme.TEXT2};font-size:10px;")
+        self.lbl_ref_hint.setStyleSheet(f"color:{theme.TEXT2};font-size:{theme.SIZE_METER};")
         self.cb_referencing.currentTextChanged.connect(
             lambda t: self.lbl_ref_hint.setText(tr(REF_HINT_KEYS.get(t, "pi.ref_hint_skip")))
         )

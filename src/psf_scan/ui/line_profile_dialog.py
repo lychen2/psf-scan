@@ -56,7 +56,7 @@ class LineProfileDialog(QDialog):
         self._fwhm_lbl = QLabel(tr("line_profile.fwhm_placeholder"))
         self._fwhm_lbl.setStyleSheet(
             f"color:{theme.TEXT0};font-family:'Iosevka Term',monospace;"
-            "font-size:11px;font-weight:600;"
+            f"font-size:{theme.SIZE_BODY};font-weight:600;"
         )
         row.addWidget(self._fwhm_lbl)
         row.addStretch()

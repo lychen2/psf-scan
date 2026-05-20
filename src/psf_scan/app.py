@@ -130,7 +130,6 @@ class MainWindow(QMainWindow):
         self._wire_signals()
         self._diagnostic_timer.start()
         self.stage_view.set_safety_limits(self._settings.safety_limits())
-        self.status_strip.set_plan(self.control.plan_text())
         self._refresh_data_dir_label()
         # 启动时检测中途崩溃留下的未收尾 stack.h5 (C.4 恢复)
         QTimer.singleShot(0, self._check_orphan_scans)
@@ -250,7 +249,6 @@ class MainWindow(QMainWindow):
         self.control.autofocus_requested.connect(self._on_autofocus_start)
         self.control.scan_started.connect(self._on_scan_start)
         self.control.scan_canceled.connect(self._on_scan_cancel)
-        self.control.plan_changed.connect(self.status_strip.set_plan)
         self.control.single_axis_changed.connect(self.stage_view.set_single_axis)
         self.stage_jog.stop_requested.connect(self._on_emergency_stop)
         self.stage_jog.set_zero_requested.connect(self._on_set_zero)
@@ -940,10 +938,9 @@ class MainWindow(QMainWindow):
         self._scanner.error.connect(self._on_scan_error)
 
         self.control.set_scanning(True)
-        self.control.set_status(f"scanning  0 / {len(path)}    avg {params.sample_count}")
         self.status_strip.set_state(STATE_SCANNING, tr("status.scanning"))
         self.status_strip.set_progress_idle(f"0 / {len(path)}      0%")
-        self.status_strip.set_message("acquiring averaged frames")
+        self.status_strip.set_message(f"scanning 0 / {len(path)} · avg {params.sample_count}")
         self._scan_thread.start()
 
     @Slot()
@@ -951,7 +948,6 @@ class MainWindow(QMainWindow):
         if self._scanner:
             self._scanner.cancel()
         self._repeat_reset()
-        self.control.set_status("canceling scan")
         self.status_strip.set_message("canceling scan")
 
     @Slot(int, int, float, float, float)
@@ -1021,7 +1017,6 @@ class MainWindow(QMainWindow):
         if frames_collected == 0:
             self._teardown_scan_thread()
             self.control.set_scanning(False)
-            self.control.set_status("scan canceled")
             self.status_strip.set_state(STATE_IDLE, tr("status.canceled"))
             self.status_strip.set_message("scan canceled · no frames")
             self.statusBar().showMessage("scan canceled", 5000)
@@ -1033,7 +1028,6 @@ class MainWindow(QMainWindow):
     def _on_done(self, result: ScanResult) -> None:
         self._teardown_scan_thread()
         self.control.set_scanning(False)
-        self.control.set_results_loaded(True)
         result.metadata = self._scan_metadata
         result.pixel_calibration = self._scan_pixel_calibration
         display_frames = result.corrected_frames if result.corrected_frames is not None else result.frames
@@ -1086,9 +1080,8 @@ class MainWindow(QMainWindow):
         """Launch save/finalize on a worker thread; UI shows 'saving…' while it runs."""
         if self._save_thread is not None:
             return
-        self.control.set_status(f"saving · {target_dir.name}…")
         self.status_strip.set_state(STATE_SCANNING, tr("status.saving"))
-        self.status_strip.set_message(tr("status.saving"))
+        self.status_strip.set_message(f"saving · {target_dir.name}…")
         self._save_thread = QThread()
         self._save_worker = _SaveWorker(target_dir, result, name=name, streamed=streamed)
         self._save_worker.moveToThread(self._save_thread)
@@ -1103,18 +1096,13 @@ class MainWindow(QMainWindow):
     @Slot(object)
     def _on_save_done(self, target: Path) -> None:
         self._teardown_save_thread()
-        self.control.set_status(f"saved · {target.name}")
         self.status_strip.set_state(STATE_SAVED, tr("status.saved"))
-        self.status_strip.set_message(target.name)
+        self.status_strip.set_message(f"saved · {target.name}")
         self.statusBar().showMessage(f"saved · {target}", 8000)
         # 时间序列: 派下一次或收尾
         self._repeat_done += 1
         if self._repeat_total > 1 and self._repeat_done < self._repeat_total:
             wait_s = self._repeat_interval_s
-            self.control.set_status(
-                tr("status.timeseries_waiting",
-                   done=self._repeat_done, total=self._repeat_total, wait_s=wait_s)
-            )
             self.status_strip.set_message(
                 tr("status.timeseries_waiting",
                    done=self._repeat_done, total=self._repeat_total, wait_s=wait_s)
@@ -1147,9 +1135,8 @@ class MainWindow(QMainWindow):
                    is_primary, streamed, msg)
         if not is_primary:
             QMessageBox.critical(self, "保存失败", msg)
-            self.control.set_status(f"save failed: {msg}")
             self.status_strip.set_state(STATE_ERROR, tr("status.error"))
-            self.status_strip.set_message(msg)
+            self.status_strip.set_message(f"save failed: {msg}")
             self._repeat_reset()
             return
         primary = self._settings.data_dir()
@@ -1161,7 +1148,6 @@ class MainWindow(QMainWindow):
             self, "选择数据保存目录", str(Path.home()),
         )
         if not chosen:
-            self.control.set_status("save canceled · data kept in memory")
             self.status_strip.set_state(STATE_ERROR, tr("status.not_saved"))
             self.status_strip.set_message("保存已取消，数据仍在内存里")
             self._repeat_reset()

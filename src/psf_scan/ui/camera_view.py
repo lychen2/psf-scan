@@ -40,7 +40,7 @@ def _empty_html(main_key: str, hint_key: str) -> str:
     """两行空状态 (主标题 + 浅色提示) — RichText 渲染。"""
     return (
         f"<div>{tr(main_key)}</div>"
-        f"<div style='color:{theme.TEXT3};font-size:10px;"
+        f"<div style='color:{theme.TEXT3};font-size:{theme.SIZE_METER};"
         "margin-top:6px;font-weight:400;letter-spacing:0px;'>"
         f"{tr(hint_key)}</div>"
     )
@@ -140,7 +140,7 @@ class CameraView(QWidget):
         label.setTextFormat(Qt.RichText)
         label.setStyleSheet(
             f"color:{theme.TEXT3};background:{theme.BG0};"
-            "font-family:'Iosevka Term',monospace;font-size:12px;"
+            f"font-family:'Iosevka Term',monospace;font-size:{theme.SIZE_CONTROL};"
             "font-weight:500;letter-spacing:1px;"
         )
         return label
@@ -209,7 +209,7 @@ class CameraView(QWidget):
         self.btn_line_profile.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
             f"background:{theme.BG0};padding:2px 10px;"
-            "font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;"
+            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
             "font-weight:600;}"
             f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
             f"QToolButton:checked{{color:{theme.BG0};background:{theme.ACCENT};"
@@ -226,7 +226,7 @@ class CameraView(QWidget):
         self.btn_advanced.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
             f"background:{theme.BG0};padding:2px 10px;"
-            "font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;"
+            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
             "font-weight:600;}"
             f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
             f"QToolButton:checked{{color:{theme.TEXT0};background:{theme.BG1};"
@@ -494,7 +494,7 @@ class CameraView(QWidget):
         btn.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
             f"background:{theme.BG0};padding:2px 10px;"
-            "font-family:'Inter',sans-serif;font-size:10px;letter-spacing:1px;"
+            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
             "font-weight:600;}"
             f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
             f"QToolButton:disabled{{color:{theme.TEXT3};border-color:{theme.BORDER0};}}"

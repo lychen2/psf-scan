@@ -83,7 +83,7 @@ class CameraAdvancedBar(QWidget):
         row2.addStretch()
         self._lbl_status = QLabel("")
         self._lbl_status.setStyleSheet(
-            f"color:{theme.TEXT3};font-family:'Iosevka Term',monospace;font-size:10px;"
+            f"color:{theme.TEXT3};font-family:'Iosevka Term',monospace;font-size:{theme.SIZE_METER};"
         )
         row2.addWidget(self._lbl_status)
         outer.addLayout(row2)

@@ -16,6 +16,11 @@ colors:
   signal-lo: "#7aa9c5"
   sampled: "#5f8f83"
   danger: "#b55345"
+  danger-hi: "#c86b5d"
+  danger-lo: "#984438"
+  warn: "#d6892b"
+  bevel-highlight: "#fefdf7"
+  bevel-shadow: "#d4cfc3"
   plot-locator: "#2f73a3"
   volume-grid: "#c8d5d7"
   volume-shell-1: "#f0a6a0"
@@ -27,12 +32,12 @@ colors:
 typography:
   display:
     fontFamily: "Inter, SF Pro Text, Segoe UI, Noto Sans CJK SC, Noto Sans, sans-serif"
-    fontSize: "11px"
+    fontSize: "12px"
     fontWeight: 700
     letterSpacing: "3px"
   section:
     fontFamily: "Inter, SF Pro Text, Segoe UI, Noto Sans CJK SC, Noto Sans, sans-serif"
-    fontSize: "10px"
+    fontSize: "13px"
     fontWeight: 600
     letterSpacing: "2px"
   body:
@@ -41,7 +46,7 @@ typography:
     fontWeight: 400
   value:
     fontFamily: "Iosevka Term, JetBrains Mono, Cascadia Mono, Fira Code, DejaVu Sans Mono, Menlo, Consolas, monospace"
-    fontSize: "13px"
+    fontSize: "14px"
     fontWeight: 500
   control-value:
     fontFamily: "Iosevka Term, JetBrains Mono, Cascadia Mono, Fira Code, DejaVu Sans Mono, Menlo, Consolas, monospace"
@@ -49,7 +54,7 @@ typography:
     fontWeight: 400
   meter:
     fontFamily: "Iosevka Term, JetBrains Mono, Cascadia Mono, Fira Code, DejaVu Sans Mono, Menlo, Consolas, monospace"
-    fontSize: "11px"
+    fontSize: "10px"
     fontWeight: 400
   button:
     fontFamily: "Inter, SF Pro Text, Segoe UI, Noto Sans CJK SC, Noto Sans, sans-serif"
@@ -65,15 +70,14 @@ rounded:
   none: "0px"
 spacing:
   hairline: "1px"
-  xxs: "2px"
-  xs: "4px"
-  sm: "6px"
-  md: "8px"
-  lg: "10px"
-  xl: "12px"
-  xxl: "14px"
-  panel-gutter: "20px"
-  column-gap: "28px"
+  g-4: "4px"
+  g-8: "8px"
+  g-16: "16px"
+  g-24: "24px"
+  g-32: "32px"
+  g-48: "48px"
+  panel-gutter: "24px"
+  column-gap: "32px"
 components:
   button:
     backgroundColor: "transparent"
@@ -156,9 +160,13 @@ The palette is **Restrained**: warm neutral surfaces carry the interface, Signal
 - **Sampled**: Completed scan points in `StageView`. It must not be reused for success decoration outside scan completion.
 
 ### Tertiary
-- **Danger**: Hover-only destructive or interruptive actions such as disconnect and stop, plus saturation warning text.
+- **Danger**: Safety, integrity, and destructive operations: E-STOP, soft-limits-disabled warning, find-reference confirmation, scan error info-line, soft-limit dashed lines in StageView, danger button hover/border. Terracotta, intentionally calmer than vermillion — it should read as "halt" without screaming on a warm-neutral surface.
+- **Warn**: Measurement-quality cautions that do not threaten safety: SATURATED badge on the camera view, MIP ROI rendered-budget hint. Amber, distinct from both Danger and Sampled. Use only when the user can keep working but the readout is suspect.
 - **Plot Locator**: Temporary crosshair locator in PSF slice and MIP views. It is bluer and stronger than axis text, but it fades quickly.
 - **Volume Shell Scale**: The PSF 3D surface uses a red shell ramp from outer translucent shells to the dense inner core. This is data rendering, not application chrome.
+
+### Bevel
+- **Bevel Highlight** and **Bevel Shadow**: A near-white / warm-gray pair used as 1px top-left + bottom-right borders on inputs, buttons, tabs, and checkboxes to suggest a flush instrument-panel bevel without elevation. They are not surfaces or text colors; they only appear as 1px borders inside component styles.
 
 ### Neutral
 - **Paper**: Plot canvas, camera image background, status bar, spinbox and combobox surfaces.
@@ -187,12 +195,12 @@ The palette is **Restrained**: warm neutral surfaces carry the interface, Signal
 **Character:** Compact sans for the instrument shell, narrow mono for values. The pairing should feel like a lab plotting utility, not an editorial brand surface.
 
 ### Hierarchy
-- **Display** (700, 11px, tracking 3px): Only the `PSF·SCAN` corner title.
-- **Section** (600, 10px, tracking 2px, uppercase): Section headers such as `1 DEVICES`, `2 STAGE`, `3 SCAN PLAN`, and `VIEW`.
+- **Display** (700, 12px, tracking 3px): Only the `PSF·SCAN` corner title.
+- **Section** (600, 13px, tracking 2px, uppercase): Section headers such as `DEVICES`, `STAGE`, `SCAN PLAN`, and `VIEW`.
 - **Body** (400, 11px): Checkbox labels, default button text, and short error text.
-- **Value** (500, 13px): Device state, scan summary, current status, and position readouts.
+- **Value** (500, 14px): Device state, scan summary, current status, and position readouts.
 - **Control Value** (400, 12px): Spinboxes and comboboxes.
-- **Meter** (400, 11px): FPS, peak, image size, plot metadata, status bar text.
+- **Meter** (400, 10px): FPS, peak, image size, plot metadata, status bar text.
 - **Button Primary** (600, 11px, tracking 1px): `START SCAN` and `connect`.
 
 ### Named Rules
@@ -220,6 +228,7 @@ This system uses **zero shadows**. There is no box-shadow, drop shadow, glow, bl
 
 ### Inputs / Fields
 - **Style:** Spinboxes and comboboxes use Paper fill, Rule Soft border, `0px` radius, compact internal padding.
+- **Hover:** Border switches to Rule Firm. ACCENT is reserved for focus only — hover and focus must remain visually distinct.
 - **Focus:** Border switches to Signal.
 - **Disabled:** Surface fill, Ink Dim text, Rule Firm border.
 - **Numeric fields:** Spinbox steppers are removed; values stay mono.
@@ -235,7 +244,7 @@ This system uses **zero shadows**. There is no box-shadow, drop shadow, glow, bl
 
 ### Progress Bar
 - **Shape:** 14px high rectangular bar, Paper track, Rule Soft border.
-- **Fill:** Signal chunk.
+- **Fill:** Signal chunk while scanning. On completion (`idx >= total`) the chunk flips to Sampled green so the progress region matches the StageView legend's "sampled" state. Reset back to Signal when the next scan starts.
 - **Text:** Centered mono `10px`, Ink Muted.
 
 ### Section Header
@@ -248,11 +257,11 @@ This system uses **zero shadows**. There is no box-shadow, drop shadow, glow, bl
 - **Chrome:** Histogram, menu, and ROI controls are hidden.
 - **Colormap:** viridis by default. Auto levels happen once on the first frame; subsequent frames keep fixed levels.
 - **Meter bars:** Exposure and gain controls sit above the image; image size, peak, and FPS sit below with 1px rules.
-- **Saturation:** `SATURATED` appears in Danger, mono, 11px, 600 weight, tracking 1px.
+- **Saturation:** `SATURATED` appears in Warn (amber), mono, 10px, 700 weight, tracking 2px. It is a measurement-quality caution, not a safety halt.
 
 ### Stage View
-- **Structure:** XY plot plus narrow Z plot, with a legend bar below.
-- **Point language:** Current is Signal plus marker at size 18 in XY and Signal dot at size 12 in Z. Sampled is green dots. Planned path is Rule Firm gray dots.
+- **Structure:** Single horizontal Z plot with a legend bar below.
+- **Point language:** Current is Signal plus marker at size 14. Sampled is green dots. Planned path is Rule Firm gray dots.
 - **Axes:** Ink Dim labels, Rule Firm axis pens, subtle grid alpha 0.18.
 - **Performance:** Repaint is throttled at 33ms, about 30 Hz.
 
@@ -261,6 +270,9 @@ This system uses **zero shadows**. There is no box-shadow, drop shadow, glow, bl
 - **Locator:** Plot Locator crosshair appears on slice and MIP views, then fades in 12 steps at 55ms intervals.
 - **Modes:** ORTHO, MIP, and VOLUME share the same compact control strip.
 - **3D volume:** Background remains Paper, grid uses Volume Grid, isosurface shells use the red Volume Shell Scale. The volume scale is data-specific and must not leak into controls.
+
+### Metadata
+- **Input:** Moved to a modal dialog to preserve main screen space. Accessed via the "Metadata..." button in the Scan Plan section.
 
 ## 6. Do's and Don'ts
 

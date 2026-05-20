@@ -127,6 +127,17 @@ class UserSettings:
         for key, value in params.items():
             self.set_value(f"pi/{key}", value)
 
+    def ui_scale_pref(self) -> float:
+        """UI 缩放偏好。0.0 = 自动(按屏幕 DPI 推荐),其余值 = 显式倍率。"""
+        raw = self._settings.value("ui/scale_factor", 0.0)
+        try:
+            return float(raw or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def set_ui_scale_pref(self, v: float) -> None:
+        self.set_value("ui/scale_factor", float(v))
+
     def language(self) -> str:
         raw = str(self._settings.value(LANGUAGE_KEY, DEFAULT_LANGUAGE))
         return raw if raw in SUPPORTED else DEFAULT_LANGUAGE

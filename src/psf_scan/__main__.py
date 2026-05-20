@@ -33,11 +33,13 @@ def main() -> int:
     _bootstrap.install_excepthook(gui=True)
     _bootstrap.install_qt_message_handler()
 
-    from psf_scan.ui.settings import APP_NAME, ORG_NAME
+    from psf_scan.ui.settings import APP_NAME, ORG_NAME, UserSettings
     from psf_scan.ui.theme import apply_theme
+    from psf_scan.ui.scale import effective_scale
     app.setOrganizationName(ORG_NAME)
     app.setApplicationName(APP_NAME)
-    apply_theme(app)
+    user_settings = UserSettings()
+    apply_theme(app, effective_scale(user_settings.ui_scale_pref(), app))
 
     from psf_scan._splash import show_splash
     splash = show_splash()

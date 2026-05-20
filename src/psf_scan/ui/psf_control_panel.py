@@ -31,7 +31,7 @@ def _empty_html(text: str, hint: str | None) -> str:
         return text
     return (
         f"<div>{text}</div>"
-        f"<div style='color:{theme.TEXT3};font-size:10px;"
+        f"<div style='color:{theme.TEXT3};font-size:{theme.SIZE_METER};"
         "margin-top:6px;font-weight:400;letter-spacing:0px;'>"
         f"{hint}</div>"
     )

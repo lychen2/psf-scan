@@ -29,12 +29,15 @@ from ..core.pixel_calibration import METHOD_LINE, METHOD_SENSOR_OBJECTIVE, from_
 from ..core.safety import SafetyLimits
 from . import theme
 from .pi_connect_dialog import PIConnectDialog
+from .scale import recommend_scale
 from .settings import UserSettings
 from .widgets import SectionHeader
 
 
 AUTOFOCUS_SAMPLE_MIN = 1
 AUTOFOCUS_SAMPLE_MAX = 50
+
+_UI_SCALE_CHOICES = (1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5)
 
 
 class SettingsDialog(QDialog):
@@ -90,9 +93,33 @@ class SettingsDialog(QDialog):
             self.cb_lang.setCurrentIndex(ix)
         lang_form.addRow(tr("settings.language"), self.cb_lang)
         hint = QLabel(tr("settings.language_hint"))
-        hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         lang_form.addRow("", hint)
         layout.addLayout(lang_form)
+
+        # UI 缩放 (4K 屏抢救)
+        layout.addWidget(SectionHeader(tr("settings.appearance_section")))
+        scale_form = QFormLayout()
+        scale_form.setLabelAlignment(Qt.AlignRight)
+        self.cb_ui_scale = QComboBox()
+        self.cb_ui_scale.setToolTip(tr("tip.ui_scale"))
+        from PySide6.QtWidgets import QApplication as _QApp  # noqa: PLC0415
+        qapp = _QApp.instance()
+        auto_recommend_pct = int(round(recommend_scale(qapp) * 100)) if qapp is not None else 100
+        self.cb_ui_scale.addItem(
+            tr("settings.ui_scale_auto", percent=auto_recommend_pct), 0.0,
+        )
+        for v in _UI_SCALE_CHOICES:
+            self.cb_ui_scale.addItem(f"{int(round(v * 100))}%", v)
+        cur_scale = float(self._settings.ui_scale_pref())
+        ix = self.cb_ui_scale.findData(cur_scale)
+        self.cb_ui_scale.setCurrentIndex(ix if ix >= 0 else 0)
+        scale_form.addRow(tr("settings.ui_scale"), self.cb_ui_scale)
+        scale_hint = QLabel(tr("settings.ui_scale_restart_hint"))
+        scale_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
+        scale_hint.setWordWrap(True)
+        scale_form.addRow("", scale_hint)
+        layout.addLayout(scale_form)
 
         # 时间序列扫描 (从 ControlPanel 挪入,低频功能)
         layout.addWidget(SectionHeader(tr("settings.timeseries_section")))
@@ -112,7 +139,7 @@ class SettingsDialog(QDialog):
         self.sp_interval.setToolTip(tr("tip.repeat_interval"))
         ts_form.addRow(tr("settings.timeseries_interval"), self.sp_interval)
         ts_hint = QLabel(tr("settings.timeseries_hint"))
-        ts_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        ts_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         ts_hint.setWordWrap(True)
         ts_form.addRow("", ts_hint)
         layout.addLayout(ts_form)
@@ -142,7 +169,7 @@ class SettingsDialog(QDialog):
         self.lbl_safety_warn.setWordWrap(True)
         self.lbl_safety_warn.setStyleSheet(
             f"color:{theme.DANGER};background:{theme.BG1};border:1px solid {theme.DANGER};"
-            "padding:6px;font-size:10px;"
+            f"padding:6px;font-size:{theme.SIZE_METER};"
         )
         self.lbl_safety_warn.setVisible(not limits.enabled)
         gbl.addWidget(self.lbl_safety_warn)
@@ -151,22 +178,22 @@ class SettingsDialog(QDialog):
         self.lbl_safety_hint.setWordWrap(True)
         self.lbl_safety_hint.setStyleSheet(
             f"color:{theme.TEXT1};background:{theme.BG1};border:1px solid {theme.BORDER1};"
-            "padding:6px;font-size:10px;"
+            f"padding:6px;font-size:{theme.SIZE_METER};"
         )
         gbl.addWidget(self.lbl_safety_hint)
 
         form = QFormLayout()
-        self.sp_xmin = _dspin(-1e5, 1e5, limits.x_min)
+        self.sp_xmin = _dspin(-1e7, 1e7, limits.x_min)
         self.sp_xmin.setToolTip(tr("tip.settings_axis_min"))
-        self.sp_xmax = _dspin(-1e5, 1e5, limits.x_max)
+        self.sp_xmax = _dspin(-1e7, 1e7, limits.x_max)
         self.sp_xmax.setToolTip(tr("tip.settings_axis_max"))
-        self.sp_ymin = _dspin(-1e5, 1e5, limits.y_min)
+        self.sp_ymin = _dspin(-1e7, 1e7, limits.y_min)
         self.sp_ymin.setToolTip(tr("tip.settings_axis_min"))
-        self.sp_ymax = _dspin(-1e5, 1e5, limits.y_max)
+        self.sp_ymax = _dspin(-1e7, 1e7, limits.y_max)
         self.sp_ymax.setToolTip(tr("tip.settings_axis_max"))
-        self.sp_zmin = _dspin(-1e5, 1e5, limits.z_min)
+        self.sp_zmin = _dspin(-1e7, 1e7, limits.z_min)
         self.sp_zmin.setToolTip(tr("tip.settings_axis_min"))
-        self.sp_zmax = _dspin(-1e5, 1e5, limits.z_max)
+        self.sp_zmax = _dspin(-1e7, 1e7, limits.z_max)
         self.sp_zmax.setToolTip(tr("tip.settings_axis_max"))
         form.addRow(tr("settings.z_min"), self.sp_zmin)
         form.addRow(tr("settings.z_max"), self.sp_zmax)
@@ -230,7 +257,7 @@ class SettingsDialog(QDialog):
         ref_warn.setWordWrap(True)
         ref_warn.setStyleSheet(
             f"color:{theme.DANGER};background:{theme.BG1};border:1px solid {theme.DANGER};"
-            "padding:6px;font-size:10px;"
+            f"padding:6px;font-size:{theme.SIZE_METER};"
         )
         rfl.addWidget(ref_warn)
         self.btn_ref = QPushButton(tr("settings.reference_button"))
@@ -262,7 +289,7 @@ class SettingsDialog(QDialog):
         avl.addLayout(row_inv)
         axes_hint = QLabel(tr("settings.axes_hint"))
         axes_hint.setWordWrap(True)
-        axes_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        axes_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         avl.addWidget(axes_hint)
         layout.addLayout(avl)
         layout.addStretch()
@@ -324,7 +351,7 @@ class SettingsDialog(QDialog):
 
         self.lbl_pixel_calibration_status = QLabel(_pixel_calibration_status(cfg))
         self.lbl_pixel_calibration_status.setWordWrap(True)
-        self.lbl_pixel_calibration_status.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        self.lbl_pixel_calibration_status.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         layout.addWidget(self.lbl_pixel_calibration_status)
         self.cb_pixel_calibration_method.currentIndexChanged.connect(
             self._refresh_pixel_calibration_hint,
@@ -382,7 +409,7 @@ class SettingsDialog(QDialog):
 
         hint = QLabel(tr("calibration.hint"))
         hint.setWordWrap(True)
-        hint.setStyleSheet(f"color:{theme.TEXT3};font-size:10px;")
+        hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         layout.addWidget(hint)
         layout.addStretch()
         return w
@@ -487,6 +514,10 @@ class SettingsDialog(QDialog):
         new_lang = self.cb_lang.currentData()
         old_lang = self._settings.language()
         self._settings.set_language(new_lang)
+        # UI 缩放
+        new_scale = float(self.cb_ui_scale.currentData())
+        old_scale = float(self._settings.ui_scale_pref())
+        self._settings.set_ui_scale_pref(new_scale)
         # 软限位
         self._settings.set_safety_limits(SafetyLimits(
             enabled=self.chk_safety.isChecked(),
@@ -539,6 +570,8 @@ class SettingsDialog(QDialog):
         # 语言变更提示重启
         if new_lang != old_lang:
             QMessageBox.information(self, tr("settings.title"), tr("settings.language_hint"))
+        elif abs(new_scale - old_scale) > 1e-6:
+            QMessageBox.information(self, tr("settings.title"), tr("settings.ui_scale_restart_hint"))
         self.accept()
 
 

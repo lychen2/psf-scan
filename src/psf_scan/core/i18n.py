@@ -320,6 +320,10 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "界面语言 (中/英) · 切换后需重启生效",
         "en": "UI language (zh/en) · restart required",
     },
+    "tip.ui_scale": {
+        "zh": "整体放大界面字体。自动档按屏幕 DPI 推荐;手动档覆盖自动值。改后需重启。",
+        "en": "Scale all UI fonts. Auto follows screen DPI; manual overrides it. Restart required.",
+    },
     "tip.settings_safety_enable": {
         "zh": "总开关: 取消勾选只关闭 safety/* 软限位；驱动层行程检查仍会生效",
         "en": "Master switch: disables only safety/* soft limits; driver travel checks still apply",
@@ -483,6 +487,13 @@ _DICT: dict[str, dict[str, str]] = {
     "settings.tab_data": {"zh": "数据", "en": "Data"},
     "settings.language": {"zh": "界面语言", "en": "Language"},
     "settings.language_hint": {"zh": "切换语言需要重启应用生效", "en": "Restart required after switching"},
+    "settings.appearance_section": {"zh": "界面外观", "en": "Appearance"},
+    "settings.ui_scale": {"zh": "界面缩放", "en": "UI scale"},
+    "settings.ui_scale_auto": {"zh": "自动 ({percent}%)", "en": "Auto ({percent}%)"},
+    "settings.ui_scale_restart_hint": {
+        "zh": "切换 UI 缩放需要重启应用生效。4K 屏建议 150%—175%。",
+        "en": "Restart required after changing UI scale. 150%–175% recommended on 4K screens.",
+    },
     "settings.timeseries_section": {"zh": "时间序列扫描", "en": "Time-series scan"},
     "settings.timeseries_repeat": {"zh": "重复次数", "en": "Repeat count"},
     "settings.timeseries_interval": {"zh": "间隔 (分钟)", "en": "Interval (min)"},
@@ -597,6 +608,17 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "新行程半径 (µm) — 总范围将是 ±此值:",
         "en": "New travel radius (µm) — total range will be ±this:",
     },
+    "calib.open": {"zh": "标定行程范围…", "en": "Calibrate range…"},
+    "calib.title": {"zh": "标定行程范围", "en": "Calibrate Range"},
+    "calib.intro": {
+        "zh": "用主面板的 ◀ ▶ 把位移台移到下限,点[记下限];移到上限,点[记上限];最后[应用]写入软限位。重设范围会以当前位置为 0 重置行程。",
+        "en": "Use ◀ ▶ on the main panel to drive the stage to the lower limit, click Rec-; drive to the upper limit, click Rec+; then Apply to commit. Reset Range zeroes travel around current position.",
+    },
+    "calib.current_pos": {
+        "zh": "当前位置: {z:+.3f} µm",
+        "en": "current: {z:+.3f} µm",
+    },
+    "calib.close": {"zh": "关闭", "en": "Close"},
 
     # ── PI 连接对话框 ────────────────────────────
     "pi.controller": {"zh": "控制器", "en": "controller"},

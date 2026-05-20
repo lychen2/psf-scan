@@ -38,7 +38,7 @@ class AutofocusDialog(QDialog):
         self._lbl_range = QLabel(
             tr("autofocus.range_label", lo=z_range[0], hi=z_range[1], n=total_points)
         )
-        self._lbl_range.setStyleSheet(f"color:{theme.TEXT1};font-size:10px;")
+        self._lbl_range.setStyleSheet(f"color:{theme.TEXT1};font-size:{theme.SIZE_METER};")
         layout.addWidget(self._lbl_range)
 
         self._plot = pg.PlotWidget()
@@ -62,7 +62,7 @@ class AutofocusDialog(QDialog):
 
         row = QHBoxLayout()
         self._lbl_status = QLabel(tr("autofocus.status_running", done=0, total=self._total))
-        self._lbl_status.setStyleSheet(f"color:{theme.TEXT0};font-family:'Iosevka Term',monospace;font-size:10px;")
+        self._lbl_status.setStyleSheet(f"color:{theme.TEXT0};font-family:'Iosevka Term',monospace;font-size:{theme.SIZE_METER};")
         row.addWidget(self._lbl_status)
         row.addStretch()
         self.btn_cancel = QPushButton(tr("common.cancel"))

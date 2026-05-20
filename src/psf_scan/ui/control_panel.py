@@ -24,8 +24,8 @@ from .progress_bar import ScanProgressBar
 from .settings import UserSettings
 from .spin_slider import SpinSliderDouble, SpinSliderInt
 from .stage_jog_panel import StageJogPanel
-from .widgets import HintLabel, SectionHeader, ValueLabel
-from .workflow import ScanBrief, duration_text
+from .widgets import HintLabel, SectionHeader
+from .workflow import ScanBrief
 
 AVG_SAMPLE_MAX = 512
 MS_PER_SECOND = 1000.0
@@ -66,14 +66,12 @@ class ControlPanel(QWidget):
     autofocus_requested = Signal()
     scan_started = Signal(object)
     scan_canceled = Signal()
-    plan_changed = Signal(str)
     single_axis_changed = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._connected = False
         self._autofocus_allowed = True
-        self._has_results = False
         self._scanning = False
         self._settings: UserSettings | None = None
         self.setObjectName("ControlPanel")
@@ -129,10 +127,10 @@ class ControlPanel(QWidget):
         self.sp_x = _sspin_double(-1e6, 1e6, 0.0, step=0.1)
         self.sp_y = _sspin_double(-1e6, 1e6, 0.0, step=0.1)
         self.sp_z = _sspin_double(-1e6, 1e6, 65050.0, step=0.1)
-        # Hide XY as requested, but keep them for backend logic
+        self.sp_z.setSuffix(" µm")
         self.sp_x.setVisible(False)
         self.sp_y.setVisible(False)
-        
+
         for s in (self.sp_x, self.sp_y, self.sp_z):
             s.setToolTip(tr("tip.target_xyz"))
         self.btn_move = _btn(tr("panel.move_stage"), enabled=False)
@@ -146,28 +144,26 @@ class ControlPanel(QWidget):
         self.btn_home.clicked.connect(self.home_requested.emit)
         self.btn_autofocus.clicked.connect(self.autofocus_requested.emit)
         self.stage_jog = StageJogPanel()
-        
+
         container = QWidget()
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(theme.G_8)
-        
+
         layout.addWidget(SectionHeader(tr("panel.stage")))
-        
-        # Horizontal Z-Axis Target Row
+
+        # 单行 Z 控制带:标签 + spinslider(µm suffix) + 三按钮共行
         z_row = QHBoxLayout()
         z_row.setSpacing(theme.G_8)
-        z_label = HintLabel(tr("panel.target_z").upper())
-        z_label.setMinimumWidth(60)
+        z_label = HintLabel("Z")
+        z_label.setMinimumWidth(16)
         z_row.addWidget(z_label)
         z_row.addWidget(self.sp_z, stretch=1)
-        z_row.addWidget(HintLabel(tr("panel.unit_um")))
+        z_row.addWidget(self.btn_move)
+        z_row.addWidget(self.btn_home)
+        z_row.addWidget(self.btn_autofocus)
         layout.addLayout(z_row)
-        
-        # Buttons Row
-        btn_row = _row(self.btn_move, self.btn_home, self.btn_autofocus, _stretch=True)
-        layout.addLayout(btn_row)
-        
+
         layout.addWidget(self.stage_jog)
         return container
 
@@ -182,7 +178,6 @@ class ControlPanel(QWidget):
         self.sp_dwell.setToolTip(tr("tip.dwell"))
         self.sp_avg = _sspin_int(1, AVG_SAMPLE_MAX, ScanParams.DEFAULT_SAMPLE_COUNT)
         self.sp_avg.setToolTip(tr("tip.avg"))
-        self.lbl_plan = ValueLabel("")
         self.scan_brief = ScanBrief()
         self._scan_inputs = (
             self.sp_zs, self.sp_ze, self.sp_zd, self.sp_dwell, self.sp_avg
@@ -192,15 +187,13 @@ class ControlPanel(QWidget):
         self.btn_metadata = _btn(tr("panel.metadata") + "…")
         self.btn_metadata.clicked.connect(self._show_metadata_dialog)
         
-        # Logical flow: Range (Start -> Stop)
-        range_row = QHBoxLayout()
-        range_row.setSpacing(theme.G_8)
-        range_row.addWidget(_axis_ss(tr("panel.z_start"), self.sp_zs))
-        arrow = HintLabel("→")
-        arrow.setAlignment(Qt.AlignCenter)
-        range_row.addWidget(arrow)
-        range_row.addWidget(_axis_ss(tr("panel.z_stop"), self.sp_ze))
-        
+        # 扫描范围:Z Start / Z Stop 直接并排,无装饰
+        range_row = _row(
+            _axis_ss(tr("panel.z_start"), self.sp_zs),
+            _axis_ss(tr("panel.z_stop"), self.sp_ze),
+            _stretch=True,
+        )
+
         # Precision & Timing row
         params_row = _row(
             _axis_ss(tr("panel.z_step"), self.sp_zd),
@@ -256,15 +249,11 @@ class ControlPanel(QWidget):
         point_count = len(params.points())
         frame_count = point_count * params.sample_count
         seconds = point_count * params.dwell_ms / MS_PER_SECOND
-        self.lbl_plan.setText(
-            f"{point_count:,} pts · {frame_count:,} frames · {duration_text(seconds)}"
-        )
         self.scan_brief.set_values(
             points=point_count,
             frames=frame_count,
             seconds=seconds,
         )
-        self.plan_changed.emit(self.lbl_plan.text())
 
     def _scan_params_from_controls(self) -> ScanParams:
         params = {
@@ -281,8 +270,6 @@ class ControlPanel(QWidget):
         for w in (self.btn_move, self.btn_home, self.btn_start):
             w.setEnabled(on)
         self.btn_autofocus.setEnabled(on and self._autofocus_allowed)
-        if not on:
-            self._has_results = False
 
     def set_single_axis(self, is_single: bool) -> None:
         for n in ("sp_x", "sp_y"):
@@ -307,23 +294,12 @@ class ControlPanel(QWidget):
         if on:
             self.pb.setValue(0)
             self.pb.setFormat("0%")
-            self._has_results = False
         self._scanning = bool(on)
-
-    def set_results_loaded(self, has_results: bool) -> None:
-        self._has_results = bool(has_results)
 
     def set_progress(self, idx: int, total: int, text: str = "") -> None:
         pct = int(idx / total * 100) if total else 0
         self.pb.setValue(pct)
         self.pb.setFormat(f"{idx} / {total}   {pct}%")
-
-    def set_status(self, _text: str) -> None:
-        # Status 真相在 StatusStrip,这里保留 API 兼容(空实现)
-        pass
-
-    def plan_text(self) -> str:
-        return self.lbl_plan.text()
 
     def repeat_count(self) -> int:
         if self._settings is None:
