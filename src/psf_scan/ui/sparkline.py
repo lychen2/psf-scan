@@ -35,7 +35,7 @@ class Sparkline(QWidget):
         self._h = int(height)
         self._cap = int(capacity)
         self._values: deque[float] = deque(maxlen=self._cap)
-        self._bg = QColor(theme.BG0)
+        self._bg = QColor(theme.CANVAS_BG)
         self._fg = QColor(theme.TEXT2)
         # 复用同一支 QPen 而不是每帧 new 一根——cosmetic 1px 都不会变。
         self._pen = QPen(self._fg)

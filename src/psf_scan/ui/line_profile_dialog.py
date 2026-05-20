@@ -42,7 +42,7 @@ class LineProfileDialog(QDialog):
         layout.setSpacing(6)
 
         self._plot = pg.PlotWidget()
-        self._plot.setBackground(theme.BG0)
+        self._plot.setBackground(theme.CANVAS_BG)
         self._plot.setLabel("bottom", tr("line_profile.x_label"))
         self._plot.setLabel("left", tr("line_profile.y_label"))
         self._plot.showGrid(x=True, y=True, alpha=0.2)

@@ -16,7 +16,7 @@ class PhaseDisplay(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self.setBackground(theme.BG0)
+        self.setBackground(theme.CANVAS_BG)
         self._plot = self.addPlot(row=0, col=0)
         self._item = pg.ImageItem(axisOrder="col-major")
         self._plot.addItem(self._item)

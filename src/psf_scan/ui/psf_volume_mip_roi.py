@@ -34,7 +34,7 @@ class MipRoiOverlay(QWidget):
             f"background:{theme.BG1};border:1px solid {theme.BORDER0};"
         )
 
-        self._plot = pg.PlotWidget(background=theme.BG1)
+        self._plot = pg.PlotWidget(background=theme.CANVAS_BG)
         self._plot.setMouseEnabled(x=False, y=False)
         self._plot.setMenuEnabled(False)
         self._plot.hideAxis("bottom")
@@ -42,7 +42,7 @@ class MipRoiOverlay(QWidget):
         vb = self._plot.getViewBox()
         vb.setAspectLocked(True)
         vb.invertY(True)
-        vb.setBackgroundColor(theme.BG1)
+        vb.setBackgroundColor(theme.CANVAS_BG)
         # rect zoom 时把可视范围同步到 ROI，让"框选 = 裁切"
         vb.sigRangeChangedManually.connect(self._on_view_range_changed)
 

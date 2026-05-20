@@ -299,6 +299,13 @@ class MainWindow(QMainWindow):
         self.cam_view.set_gamma_enabled(self._settings.gamma_enabled())
         self.cam_view.refresh_pixel_calibration_status()
         self._refresh_calibration_config(show_errors=True)
+        # 如果之前因为校正失败陷在 STATE_ERROR (例如帧尺寸不匹配),
+        # 用户改完设置回来时若相机仍在连接, 把面板恢复回 ONLINE,
+        # 否则连接 / 断开入口都会被错误面板挡掉。
+        if self._camera is not None and self.status_strip.state() == STATE_ERROR:
+            device_text = self._device_summary(self._stage, self._settings.value("devices/stage_driver", ""), self._camera)
+            self.status_strip.set_state(STATE_ONLINE, tr("status.online"))
+            self.status_strip.set_message(device_text)
         self.stage_view.set_safety_limits(self._settings.safety_limits())
         self.control.set_autofocus_allowed(self._settings.autofocus_enabled())
         # 热应用 invert_z 到当前 driver — 翻转后立即生效, 不必重连
@@ -339,15 +346,50 @@ class MainWindow(QMainWindow):
 
         try:
             stage.connect()
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("stage.connect failed")
+            QMessageBox.critical(self, "启动失败", f"位移台连接失败:\n{exc}")
+            return
+        try:
             camera.connect()
+        except Exception as exc:  # noqa: BLE001
+            _log.exception("camera.connect failed")
+            QMessageBox.critical(self, "启动失败", f"相机连接失败:\n{exc}")
+            try:
+                stage.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+            return
+        try:
             self._restore_camera_settings(camera)
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("restore camera settings failed: %s", exc)
+        # 校正配置失败不阻断连接: 跑无校正模式, 警告用户后续可改设置
+        try:
             self._calibration_config = self._engage_hardware_dark(
                 config_from_settings(self._settings, camera), camera=camera
             )
+        except Exception as exc:  # noqa: BLE001
+            _log.warning("calibration config failed (running without correction): %s", exc)
+            self._calibration_config = None
+            QMessageBox.warning(
+                self, tr("settings.title"),
+                f"校正配置不可用,本次连接以无校正模式继续。\n\n{exc}\n\n"
+                "可在 ⚙ 设置 → 校正 中修改或关闭校正后保留连接状态。",
+            )
+        try:
             camera.start_streaming()
         except Exception as exc:  # noqa: BLE001
-            _log.exception("stage.connect / camera.connect / start_streaming failed")
-            QMessageBox.critical(self, "启动失败", str(exc))
+            _log.exception("camera.start_streaming failed")
+            QMessageBox.critical(self, "启动失败", f"相机出帧启动失败:\n{exc}")
+            try:
+                camera.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+            try:
+                stage.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
             return
 
         # jog panel 同步当前 stage 限位/速度/步长
@@ -413,8 +455,17 @@ class MainWindow(QMainWindow):
         try:
             return apply_calibration(frame, config)
         except Exception as exc:  # noqa: BLE001
+            # 校正失败是软可恢复的 — 把软件配置自缴, 让相机继续出原始帧,
+            # 不要切到 STATE_ERROR 面板 (会把 connect/disconnect 入口隐藏,
+            # 用户改完设置后回不到 ONLINE)。只在 info_line 上闪一条提示。
             self._calibration_config = None
-            self._show_error(tr("calibration.failed", msg=str(exc)))
+            try:
+                self._camera.disable_hardware_dark() if self._camera else None
+            except Exception:  # noqa: BLE001
+                pass
+            _log.warning("calibration disabled at runtime: %s", exc)
+            self.status_strip.set_message(tr("calibration.failed", msg=str(exc)))
+            self.statusBar().showMessage(f"calibration · {exc}", 6000)
             return frame
 
     def _refresh_calibration_config(self, *, show_errors: bool) -> bool:

@@ -42,7 +42,7 @@ class AutofocusDialog(QDialog):
         layout.addWidget(self._lbl_range)
 
         self._plot = pg.PlotWidget()
-        self._plot.setBackground(theme.BG0)
+        self._plot.setBackground(theme.CANVAS_BG)
         self._plot.setLabel("bottom", tr("autofocus.z_label"))
         self._plot.setLabel("left", tr("autofocus.score_label"))
         self._plot.showGrid(x=True, y=True, alpha=0.2)

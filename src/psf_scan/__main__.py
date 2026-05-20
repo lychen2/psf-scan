@@ -39,7 +39,7 @@ def main() -> int:
     app.setOrganizationName(ORG_NAME)
     app.setApplicationName(APP_NAME)
     user_settings = UserSettings()
-    apply_theme(app, effective_scale(user_settings.ui_scale_pref(), app))
+    apply_theme(app, effective_scale(user_settings.ui_scale_pref(), app), mode=user_settings.ui_theme())
 
     from psf_scan._splash import show_splash
     splash = show_splash()

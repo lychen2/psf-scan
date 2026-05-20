@@ -1,0 +1,200 @@
+% !TEX program = xelatex
+% 780 表征系统 / PSF Scan 一页速通卡
+% 编译: xelatex -interaction=nonstopmode quickstart.tex
+\documentclass[a4paper,10pt]{ctexart}
+
+\usepackage[
+  top=1.25cm,
+  bottom=1.15cm,
+  left=1.25cm,
+  right=1.25cm
+]{geometry}
+\usepackage[table]{xcolor}
+\usepackage{tabularx}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{tcolorbox}
+\tcbuselibrary{skins}
+\usepackage{hyperref}
+
+\definecolor{paper}{HTML}{F7F5EF}
+\definecolor{panel}{HTML}{EBE8DF}
+\definecolor{ruleSoft}{HTML}{D4CFC3}
+\definecolor{ruleFirm}{HTML}{B8B1A3}
+\definecolor{inkStrong}{HTML}{171A1C}
+\definecolor{ink}{HTML}{2A2F32}
+\definecolor{inkMuted}{HTML}{626A6C}
+\definecolor{signal}{HTML}{7AA9C5}
+\definecolor{signalWash}{HTML}{EAF2F5}
+\definecolor{sampledWash}{HTML}{E7EEE9}
+\definecolor{danger}{HTML}{B55345}
+\definecolor{dangerWash}{HTML}{F3E4DF}
+
+\pagecolor{paper}
+\AtBeginDocument{\color{ink}}
+\pagestyle{empty}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.25em}
+\renewcommand{\arraystretch}{1.18}
+\setlist[itemize]{leftmargin=1.25em,itemsep=1pt,topsep=2pt,parsep=0pt}
+\setlist[enumerate]{leftmargin=1.55em,itemsep=2pt,topsep=2pt,parsep=0pt}
+\hypersetup{colorlinks=true,linkcolor=signal,urlcolor=signal}
+
+\newcommand{\kicker}[1]{\textsf{\small\bfseries\color{inkMuted}#1}}
+\newcommand{\sect}[1]{\vspace{0.15em}{\textsf{\large\bfseries\color{inkStrong}#1}}\par\vspace{0.2em}{\color{ruleSoft}\rule{\linewidth}{0.45pt}}\vspace{0.2em}}
+\newcommand{\key}[1]{\texttt{#1}}
+
+\newtcolorbox{plainbox}[1][]{
+  enhanced, sharp corners,
+  colback=panel, colframe=ruleSoft,
+  boxrule=0.45pt,
+  left=7pt, right=7pt, top=6pt, bottom=6pt,
+  #1
+}
+
+\newtcolorbox{bluebox}[1][]{
+  enhanced, sharp corners,
+  colback=signalWash, colframe=ruleFirm,
+  boxrule=0.45pt,
+  left=7pt, right=7pt, top=6pt, bottom=6pt,
+  #1
+}
+
+\newtcolorbox{greenbox}[1][]{
+  enhanced, sharp corners,
+  colback=sampledWash, colframe=ruleSoft,
+  boxrule=0.45pt,
+  left=7pt, right=7pt, top=6pt, bottom=6pt,
+  #1
+}
+
+\newtcolorbox{warnbox}[1][]{
+  enhanced, sharp corners,
+  colback=dangerWash, colframe=danger,
+  boxrule=0.55pt,
+  left=7pt, right=7pt, top=6pt, bottom=6pt,
+  #1
+}
+
+\begin{document}
+
+\begin{tabularx}{\linewidth}{@{}Xr@{}}
+  {\kicker{780 CHARACTERIZATION SYSTEM}} & {\kicker{A4 QUICK START}} \\
+  {\Huge\bfseries 780 表征系统} & {\Large\bfseries PSF Scan 速通卡} \\
+\end{tabularx}
+{\color{ruleFirm}\rule{\linewidth}{0.7pt}}
+
+\vspace{0.35em}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}lX@{}}
+这台机器做什么 & 让位移台沿 Z 方向一步步走,每停一下相机拍一张,最后把所有照片堆起来看光斑形状\\
+你要做的事 & 选好相机和位移台 \(\to\) 连接 \(\to\) 设三个数(起点 / 终点 / 步长) \(\to\) 点 START SCAN \(\to\) 等\\
+不带硬件先练手 & 相机和位移台都选 \key{mock}(模拟),整个流程跑一遍熟悉界面,不会损坏任何东西\\
+\end{tabularx}
+
+\vspace{0.45em}
+\noindent
+\begin{minipage}[t]{0.492\linewidth}
+\begin{bluebox}
+\sect{1. 第一次跑 — 用模拟模式}
+\begin{enumerate}
+  \item 双击桌面图标打开 PSF Scan。
+  \item 顶部状态条,左边下拉选 \key{mock},右边下拉也选 \key{mock}。
+  \item 点 \textbf{Connect}(连接)。左边出现一张假图,说明界面活了。
+  \item 右边控制面板填四个数字:
+  \begin{itemize}
+    \item Z 起点 = -1.0
+    \item Z 终点 = 1.0
+    \item Z 步长 = 0.2
+    \item 停留 5 ms,每点拍 1 张
+  \end{itemize}
+  \item 点 \textbf{START SCAN}(开始扫描)。等几秒,完成后顶部切到 \textbf{PSF STACK} 标签看堆栈结果。
+\end{enumerate}
+\end{bluebox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.492\linewidth}
+\begin{plainbox}
+\sect{2. 换成真相机和真位移台}
+\textbf{相机(海康 MVS)}
+\begin{itemize}
+  \item 装好 MVS 运行库(找供应商要安装包,叫 MVS Runtime)。
+  \item 上面右边下拉选 \key{mvs},点 \textbf{connect}。
+  \item 连不上的话在终端跑一下:\key{python diagnose\_mvs.py},会告诉你哪一步卡住。
+\end{itemize}
+
+\textbf{位移台(PI M-531)}
+\begin{itemize}
+  \item 上面左边下拉选 \key{pi-m531}。
+  \item 点 \textbf{PI...} 按钮,弹窗里选连接方式(USB / 网口 / 串口)、控制器型号、位移台型号。
+  \item \textbf{第一次连接,寻参方式选 \key{skip}(跳过)}。
+  \item 点 \textbf{connect}。连上后核对当前位置数字、行程范围、软限位。
+\end{itemize}
+\end{plainbox}
+\end{minipage}
+
+\vspace{0.45em}
+\noindent
+\begin{minipage}[t]{0.492\linewidth}
+\begin{plainbox}
+\sect{3. 按 START SCAN 前的 30 秒自检}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}lX@{}}
+画面 & 左边实时图有信号,角落\textbf{没有} \textbf{SATURATED}(红字提示过曝)\\
+位置 & 当前 Z 数字大致在你想测的焦点附近\\
+范围 & 起点 / 终点把焦点夹在中间,步长不为 0\\
+软限位 & 设置 $\to$ 安全里软限位是开的,起点终点都在范围内\\
+存到哪 & 设置 $\to$ 数据里看保存目录是否可写\\
+\end{tabularx}
+
+\vspace{0.35em}
+\textbf{亮度调节顺序:}先调曝光时间。还不够再调增益。一旦出现过曝(SATURATED),立刻把曝光往回降。
+\end{plainbox}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.492\linewidth}
+\begin{greenbox}
+\sect{4. 扫完了去哪看}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}lX@{}}
+看结果 & 顶部切 \textbf{PSF STACK},三个按钮 ORTHO(切片) / MIP(投影) / VOLUME(立体)\\
+做相位 & 顶部切 \textbf{PHASE},按提示导入样品干涉图,点处理\\
+文件位置 & 默认在 \key{文档/PSF Scan} 下,按日期命名子目录\\
+主数据 & \key{stack.h5},扫描时就一帧一帧写进去,断电不丢\\
+导出 & \key{stack.tif} 直接拖到 ImageJ / Fiji 里能看\\
+参数记录 & \key{meta.json}(扫描元数据)、\key{positions.csv}(每帧位置)\\
+\end{tabularx}
+\end{greenbox}
+\end{minipage}
+
+\vspace{0.45em}
+\begin{warnbox}
+\sect{安全红线 — 出问题先看这一段}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries\color{danger}}lX@{}}
+急停 & 按 \key{Esc} 或 \key{空格},或点控制面板上红色 \textbf{急停}。立刻停一切运动\\
+寻参 & \textbf{寻参是真机械运动,不受软件软限位保护}。第一次连接绝对不要寻参,先看看坐标合不合理\\
+大位移 & 单次 Z 移动很远会弹确认框。先看单位:你是不是想输 0.5 µm,结果写成 500 µm\\
+过曝 & 出现红字 \textbf{SATURATED}:数值不准,定量数据作废。立刻降曝光或降光源,再继续\\
+\end{tabularx}
+\end{warnbox}
+
+\vspace{0.45em}
+\begin{plainbox}
+\sect{术语速查 — 看到这些字别懵}
+\begin{tabularx}{\linewidth}{@{}>{\bfseries}lX@{}}
+mock & 模拟模式,假相机假位移台,不连真硬件也能跑流程练手\\
+PSF & 光学系统对一个点光源成的像,理想是一个亮斑,实际有衍射晕\\
+ORTHO & 把 3D 堆栈切成 XY / XZ / YZ 三个面看\\
+MIP & 把 3D 堆栈沿一个方向取最大值压成 2D\\
+VOLUME & 把 3D 堆栈渲染成可旋转的立体\\
+寻参 & 位移台回到零点参考位置的过程,会有机械运动\\
+软限位 & 软件强制的安全范围,超过就拒绝移动\\
+SATURATED & 相机像素打到上限值,实际亮度更高也读不出来,数据不准\\
+exposure / gain & 曝光时间和增益。先调曝光,后调增益,前者影响动态范围,后者只放大噪声\\
+dwell & 移动到位后停多久再拍。机械晃完没稳定就拍会糊\\
+avg & 每点拍几张取平均,可以压低噪声\\
+\end{tabularx}
+\end{plainbox}
+
+\vfill
+{\small\color{inkMuted}
+推荐顺序:mock 扫描跑通一次 $\to$ 设软限位 $\to$ 连相机 $\to$ 连位移台 $\to$ 小范围低速试一次 $\to$ 扩大到正式参数}
+\hfill
+{\small\color{inkMuted}技术支持联系方式见软件\quad 帮助 $\to$ 关于}
+
+\end{document}

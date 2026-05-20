@@ -220,6 +220,10 @@ class StatusStrip(QWidget):
         # disconnect link 仅在 ONLINE / SCANNING / ERROR 显示
         self._btn_disconnect.setVisible(panel != 0)
         self._apply_info_style(state)
+        self._state = state
+
+    def state(self) -> str:
+        return getattr(self, "_state", STATE_IDLE)
 
     def set_position(self, x: float, y: float, z: float) -> None:
         self._pending_pos = (float(x), float(y), float(z))

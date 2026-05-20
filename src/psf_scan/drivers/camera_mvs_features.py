@@ -139,11 +139,34 @@ _HARDWARE_DARK_NODES: tuple[str, ...] = (
     "DPCEnable",                  # Defective Pixel Correction (兜底)
 )
 
+# 触发型 NUC 的命令节点 (相机当下捕获 dark 计算 offset, 烧入 RAM).
+# 出厂校准型相机这些节点不存在, SetCommandValue 会返回非零, 视为不支持.
+_HARDWARE_DARK_TRIGGER_NODES: tuple[str, ...] = (
+    "NUCExecute",                  # 部分海康 / GenICam
+    "DarkFieldCorrectionExecute",  # 工业线相机
+    "OBCExecute",                  # On-board Black Correction
+    "RunDarkCalibration",          # 部分科研 sCMOS
+)
+
 
 def engage_hardware_dark(cam) -> str | None:
     """逐个尝试启用相机内置暗场补偿; 返回命中的节点名, 全部失败时 None."""
     for key in _HARDWARE_DARK_NODES:
         if _ok(cam.MV_CC_SetBoolValue(key, True)):
+            return key
+    return None
+
+
+def trigger_hardware_dark(cam) -> str | None:
+    """执行触发型相机 NUC; 返回命中的命令节点名, 没命中返回 None.
+
+    调用前必须确认镜头已盖, 相机在 grab 帧. 命令节点不存在的相机 SetCommandValue
+    返回非零, 安静跳过, 不污染相机状态.
+    """
+    if not hasattr(cam, "MV_CC_SetCommandValue"):
+        return None
+    for key in _HARDWARE_DARK_TRIGGER_NODES:
+        if _ok(cam.MV_CC_SetCommandValue(key)):
             return key
     return None
 
@@ -256,3 +279,8 @@ class MVSAdvancedMixin:
     @property
     def hardware_dark_node(self) -> str | None:
         return self._hw_dark_node
+
+    def trigger_hardware_dark_calibration(self) -> str | None:
+        if not self._connected:
+            return None
+        return trigger_hardware_dark(self._cam)

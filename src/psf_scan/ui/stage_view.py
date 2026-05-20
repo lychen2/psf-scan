@@ -24,7 +24,7 @@ from .widgets import HintLabel
 _BR_PATH = pg.mkBrush(theme.BORDER1)
 _BR_DONE = pg.mkBrush(theme.DONE)
 _BR_CUR = pg.mkBrush(theme.ACCENT)
-_PEN_CUR = pg.mkPen(theme.BG0, width=1)
+_PEN_CUR = pg.mkPen(theme.CANVAS_BG, width=1)
 _PEN_LIMIT = pg.mkPen(theme.DANGER, width=1, style=Qt.DashLine)
 _AXIS_COLOR = pg.mkColor(theme.TEXT3)
 
@@ -128,7 +128,7 @@ class StageView(QWidget):
 
     def _make_z(self) -> pg.PlotWidget:
         pw = pg.PlotWidget()
-        pw.setBackground(theme.BG0)
+        pw.setBackground(theme.CANVAS_BG)
         pw.setLabel("bottom", tr("stage.z"), units="µm", color=theme.TEXT3)
         pw.getAxis("left").hide()
         pw.showGrid(x=True, alpha=0.18)

@@ -109,6 +109,16 @@ class CameraBase(QObject):
         """Symbolic SDK node name used for compensation (for diagnostics)."""
         return None
 
+    def trigger_hardware_dark_calibration(self) -> str | None:
+        """Run on-camera dark / NUC calibration (lens must be capped before call).
+
+        Drivers exposing a trigger command (``NUCExecute`` / ``OBCExecute`` etc.)
+        execute it and return the node name. Drivers without a trigger command —
+        even if they support a static ``NUCEnable`` toggle — return None so the
+        caller can fall back to enable-only or software paths.
+        """
+        return None
+
 
 AVAILABLE_CAMERAS = ["mvs", "mock", "mock-interference"]
 

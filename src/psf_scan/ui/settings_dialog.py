@@ -119,6 +119,20 @@ class SettingsDialog(QDialog):
         scale_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
         scale_hint.setWordWrap(True)
         scale_form.addRow("", scale_hint)
+
+        # 主题 (light / dark) — 仅切 UI chrome,画布永远浅色
+        self.cb_theme = QComboBox()
+        self.cb_theme.setToolTip(tr("tip.settings_theme"))
+        self.cb_theme.addItem(tr("settings.theme_light"), "light")
+        self.cb_theme.addItem(tr("settings.theme_dark"), "dark")
+        cur_theme = self._settings.ui_theme()
+        ix = self.cb_theme.findData(cur_theme)
+        self.cb_theme.setCurrentIndex(ix if ix >= 0 else 0)
+        scale_form.addRow(tr("settings.theme"), self.cb_theme)
+        theme_hint = QLabel(tr("settings.theme_restart_hint"))
+        theme_hint.setStyleSheet(f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};")
+        theme_hint.setWordWrap(True)
+        scale_form.addRow("", theme_hint)
         layout.addLayout(scale_form)
 
         # 时间序列扫描 (从 ControlPanel 挪入,低频功能)
@@ -384,6 +398,16 @@ class SettingsDialog(QDialog):
             capture_cb=self._capture_dark,
             kind="dark",
         )
+        self.lbl_dark_status = QLabel("")
+        self.lbl_dark_status.setStyleSheet(
+            f"color:{theme.TEXT3};font-size:{theme.SIZE_METER};padding:2px 4px;"
+        )
+        layout.addWidget(self.lbl_dark_status)
+        self.chk_dark.toggled.connect(self._refresh_dark_status)
+        self.le_dark.textChanged.connect(self._refresh_dark_status)
+        self._dark_hw_node: str | None = None
+        self._dark_hw_kind: str = ""  # "trigger" | "enable" | ""
+        self._refresh_dark_status()
 
         self.chk_flat = QCheckBox(tr("calibration.flat_enable"))
         self.chk_flat.setChecked(bool(cfg["flat_enabled"]))
@@ -432,7 +456,7 @@ class SettingsDialog(QDialog):
         choose.setToolTip(tr("tip.calibration_choose"))
         choose.clicked.connect(lambda: self._pick_calibration_file(edit))
         row.addWidget(choose)
-        capture_key = "calibration.capture_dark" if kind == "dark" else "calibration.capture_flat"
+        capture_key = "calibration.dark_calibrate_button" if kind == "dark" else "calibration.capture_flat"
         capture = QPushButton(tr(capture_key))
         capture.setToolTip(tr("tip.calibration_capture"))
         capture.clicked.connect(lambda: capture_cb(edit))
@@ -448,7 +472,61 @@ class SettingsDialog(QDialog):
             edit.setText(chosen)
 
     def _capture_dark(self, edit: QLineEdit) -> None:
+        """自适应暗场校准: 先试相机内部 trigger, 再试出厂校准, 都失败回退软件路径."""
+        if self._camera is None:
+            QMessageBox.warning(self, tr("settings.title"), tr("calibration.no_camera"))
+            return
+        if QMessageBox.question(
+            self, tr("settings.title"), tr("calibration.dark_lens_cap_prompt")
+        ) != QMessageBox.Yes:
+            return
+        # 1) 触发型 NUC
+        node = self._camera.trigger_hardware_dark_calibration()
+        if node:
+            self._dark_hw_kind = "trigger"
+            self._dark_hw_node = node
+            self.chk_dark.setChecked(True)
+            edit.setText("")
+            self._refresh_dark_status()
+            QMessageBox.information(
+                self, tr("settings.title"), tr("calibration.dark_trigger_ok", node=node),
+            )
+            return
+        # 2) 出厂校准型 (静态 enable)
+        if self._camera.try_enable_hardware_dark():
+            node = self._camera.hardware_dark_node or "(unknown)"
+            self._dark_hw_kind = "enable"
+            self._dark_hw_node = node
+            self.chk_dark.setChecked(True)
+            edit.setText("")
+            self._refresh_dark_status()
+            QMessageBox.information(
+                self, tr("settings.title"), tr("calibration.dark_enable_ok", node=node),
+            )
+            return
+        # 3) 软件路径
+        self._dark_hw_kind = ""
+        self._dark_hw_node = None
         self._capture_calibration(edit, kind="dark", prompt=tr("calibration.dark_prompt"))
+        self._refresh_dark_status()
+
+    def _refresh_dark_status(self, *_: object) -> None:
+        if not self.chk_dark.isChecked():
+            self.lbl_dark_status.setText(tr("calibration.dark_status_off"))
+            return
+        if self._dark_hw_kind == "trigger" and self._dark_hw_node:
+            self.lbl_dark_status.setText(
+                tr("calibration.dark_status_trigger", node=self._dark_hw_node)
+            )
+        elif self._dark_hw_kind == "enable" and self._dark_hw_node:
+            self.lbl_dark_status.setText(
+                tr("calibration.dark_status_enable", node=self._dark_hw_node)
+            )
+        else:
+            path = self.le_dark.text().strip() or "—"
+            self.lbl_dark_status.setText(
+                tr("calibration.dark_status_software", file=path)
+            )
 
     def _capture_flat(self, edit: QLineEdit) -> None:
         self._capture_calibration(edit, kind="flat", prompt=tr("calibration.flat_prompt"))
@@ -518,6 +596,10 @@ class SettingsDialog(QDialog):
         new_scale = float(self.cb_ui_scale.currentData())
         old_scale = float(self._settings.ui_scale_pref())
         self._settings.set_ui_scale_pref(new_scale)
+        # 主题
+        new_theme = str(self.cb_theme.currentData() or "light")
+        old_theme = self._settings.ui_theme()
+        self._settings.set_ui_theme(new_theme)
         # 软限位
         self._settings.set_safety_limits(SafetyLimits(
             enabled=self.chk_safety.isChecked(),
@@ -572,6 +654,8 @@ class SettingsDialog(QDialog):
             QMessageBox.information(self, tr("settings.title"), tr("settings.language_hint"))
         elif abs(new_scale - old_scale) > 1e-6:
             QMessageBox.information(self, tr("settings.title"), tr("settings.ui_scale_restart_hint"))
+        elif new_theme != old_theme:
+            QMessageBox.information(self, tr("settings.title"), tr("settings.theme_restart_hint"))
         self.accept()
 
 

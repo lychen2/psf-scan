@@ -1,6 +1,10 @@
-"""浅色科研绘图工作台主题 — 调色板、字体、应用入口。
+"""主题 — 浅色 / 深色双调色板,应用入口。
 
-QSS 模板见 ``_qss.py``。浅色中性画布避免纯白刺眼，保留绘图可读性。
+QSS 模板见 ``_qss.py``。
+- 浅色 (light): 默认,符合 PRODUCT.md 的"暖中性浅画布"原则。
+- 深色 (dark): 暖深底 UI chrome (面板 / 按钮 / 文本),给夜间或长时间观看用。
+  PSF / 相机 / stage 图等画布区永远保持浅色,colormap 由 viridis 等表达;
+  深色只切 chrome,不污染数据可读性。
 """
 
 from __future__ import annotations
@@ -28,37 +32,86 @@ class _ComboBoxQssEnforcer(QObject):
 _combo_enforcer: _ComboBoxQssEnforcer | None = None
 
 
-# ── 调色板 (OKLCH 推导) ──────────────────────────────
-BG0 = "#f7f5ef"
-BG1 = "#ebe8df"
-BG2 = "#ddd8cd"
-BORDER0 = "#d4cfc3"
-BORDER1 = "#b8b1a3"
+# ── Light palette (OKLCH 推导,warm tinted neutral) ──────────
+_LIGHT = {
+    "BG0": "#f7f5ef",
+    "BG1": "#ebe8df",
+    "BG2": "#ddd8cd",
+    "BORDER0": "#d4cfc3",
+    "BORDER1": "#b8b1a3",
+    "TEXT0": "#171a1c",
+    "TEXT1": "#2a2f32",
+    "TEXT2": "#626a6c",
+    "TEXT3": "#6f7470",
+    "ACCENT": "#9fc6dc",
+    "ACCENT_HI": "#b8d7e8",
+    "ACCENT_LO": "#7aa9c5",
+    "DONE": "#5f8f83",
+    "DANGER": "#b55345",
+    "DANGER_HI": "#c86b5d",
+    "DANGER_LO": "#984438",
+    "WARN": "#d6892b",
+    "SHADOW": "#d4cfc3",
+    "HIGHLIGHT": "#fefdf7",
+}
 
-TEXT0 = "#171a1c"
-TEXT1 = "#2a2f32"
-TEXT2 = "#626a6c"
-TEXT3 = "#6f7470"
+# ── Dark palette (warm-tinted, 不冷蓝灰也不纯黑) ──────────
+# 设计原则:基础 hue 同 light 保持暖偏(~75 度),把 lightness 推到 0.18-0.32 区间;
+# accent / danger / warn 在深底上略提亮以保持对比;bevel 反过来用深 shadow + 暖深 highlight。
+_DARK = {
+    "BG0": "#1a1714",   # paper (inputs, tooltip, status bar bg)
+    "BG1": "#241f1a",   # panel (main window, control panel)
+    "BG2": "#2e2823",   # surface (hover, disabled)
+    "BORDER0": "#3a3329",
+    "BORDER1": "#4e463a",
+    "TEXT0": "#ede8df",   # strong
+    "TEXT1": "#d4cec3",
+    "TEXT2": "#9c9789",
+    "TEXT3": "#82806f",
+    "ACCENT": "#9fc6dc",   # signal blue: 同 hue, 深底上仍醒目
+    "ACCENT_HI": "#b8d7e8",
+    "ACCENT_LO": "#7aa9c5",
+    "DONE": "#7eb0a3",     # sampled green: 略提亮
+    "DANGER": "#d6766c",   # terracotta: 提亮版
+    "DANGER_HI": "#e08879",
+    "DANGER_LO": "#b85a51",
+    "WARN": "#e3a14b",
+    "SHADOW": "#13110e",   # 更深 shadow
+    "HIGHLIGHT": "#332d27",  # 暖深 highlight
+}
 
-ACCENT = "#9fc6dc"
-ACCENT_HI = "#b8d7e8"
-ACCENT_LO = "#7aa9c5"
+# ── Canvas-locked tokens (永远浅色, 不随 mode 切) ──────────
+# PSF / 相机 / stage / autofocus / line profile / 火花线 等所有 plot canvas 使用。
+# 这些区域承载科学数据 (viridis / hot / volume shell 等 colormap),
+# 浅画布最利于颜色还原,所以无论 UI mode 如何都不切。
+CANVAS_BG = _LIGHT["BG0"]
+CANVAS_FG = _LIGHT["TEXT0"]
+CANVAS_TEXT_MUTED = _LIGHT["TEXT2"]
+CANVAS_BORDER = _LIGHT["BORDER0"]
 
-DONE = "#5f8f83"
 
-# Danger family — 与 DESIGN.md 对齐到温暖红陶 (terracotta),不再用 vermillion。
-# 语义:仪器安全 / 完整性破坏性操作。E-STOP、软限位关闭、寻参、扫描错误。
-DANGER = "#b55345"
-DANGER_HI = "#c86b5d"
-DANGER_LO = "#984438"
+# ── 当前生效调色板 (module-level, apply_theme 时重赋) ──────
+BG0 = _LIGHT["BG0"]
+BG1 = _LIGHT["BG1"]
+BG2 = _LIGHT["BG2"]
+BORDER0 = _LIGHT["BORDER0"]
+BORDER1 = _LIGHT["BORDER1"]
+TEXT0 = _LIGHT["TEXT0"]
+TEXT1 = _LIGHT["TEXT1"]
+TEXT2 = _LIGHT["TEXT2"]
+TEXT3 = _LIGHT["TEXT3"]
+ACCENT = _LIGHT["ACCENT"]
+ACCENT_HI = _LIGHT["ACCENT_HI"]
+ACCENT_LO = _LIGHT["ACCENT_LO"]
+DONE = _LIGHT["DONE"]
+DANGER = _LIGHT["DANGER"]
+DANGER_HI = _LIGHT["DANGER_HI"]
+DANGER_LO = _LIGHT["DANGER_LO"]
+WARN = _LIGHT["WARN"]
+SHADOW = _LIGHT["SHADOW"]
+HIGHLIGHT = _LIGHT["HIGHLIGHT"]
+MODE = "light"
 
-# Warn (measurement-quality caution) —— 数据可信度类预警,不到 DANGER 那种"会动停"的程度。
-# 语义:SATURATED 像素、MIP ROI 预算回缩提示。
-WARN = "#d6892b"
-
-# Bevel Effect Tokens —— 暖偏移近白, 保留扁平仪器面板上的 1px 高光感
-SHADOW = "#d4cfc3"    # Same as BORDER0
-HIGHLIGHT = "#fefdf7"
 
 # ── 间距 (Geometric Scale) ──────────────────────
 G_4 = 4
@@ -71,8 +124,6 @@ PANEL_GUTTER = 24
 
 
 # ── 字体 (Tokens) ──────────────────────────────
-# 基础像素 (scale=1.0)。apply_theme() 会按 UI scale 重写下面的 SIZE_* 字符串
-# 以及 BASE_FONT_PT,所有 import theme 的模块拿到的就是已缩放值。
 _BASE_SIZE_PX = {
     "SIZE_SECTION": 13,
     "SIZE_VALUE": 14,
@@ -106,10 +157,46 @@ def _font_family(*candidates: str, default: str) -> str:
     return default
 
 
-def apply_theme(app: QApplication, scale: float = 1.0) -> None:
+def _apply_palette(mode: str) -> None:
+    """Switch the module-level palette globals to the chosen mode."""
+    global BG0, BG1, BG2, BORDER0, BORDER1
+    global TEXT0, TEXT1, TEXT2, TEXT3
+    global ACCENT, ACCENT_HI, ACCENT_LO, DONE
+    global DANGER, DANGER_HI, DANGER_LO, WARN
+    global SHADOW, HIGHLIGHT, MODE
+    palette = _DARK if mode == "dark" else _LIGHT
+    MODE = "dark" if mode == "dark" else "light"
+    BG0 = palette["BG0"]
+    BG1 = palette["BG1"]
+    BG2 = palette["BG2"]
+    BORDER0 = palette["BORDER0"]
+    BORDER1 = palette["BORDER1"]
+    TEXT0 = palette["TEXT0"]
+    TEXT1 = palette["TEXT1"]
+    TEXT2 = palette["TEXT2"]
+    TEXT3 = palette["TEXT3"]
+    ACCENT = palette["ACCENT"]
+    ACCENT_HI = palette["ACCENT_HI"]
+    ACCENT_LO = palette["ACCENT_LO"]
+    DONE = palette["DONE"]
+    DANGER = palette["DANGER"]
+    DANGER_HI = palette["DANGER_HI"]
+    DANGER_LO = palette["DANGER_LO"]
+    WARN = palette["WARN"]
+    SHADOW = palette["SHADOW"]
+    HIGHLIGHT = palette["HIGHLIGHT"]
+
+
+def apply_theme(app: QApplication, scale: float = 1.0, mode: str = "light") -> None:
+    """Apply theme to the app, choosing palette (light|dark) and UI scale.
+
+    Must be called before any widget creation (theme tokens are module-level globals
+    consumed at widget __init__ time).
+    """
     global SANS, MONO, _combo_enforcer
     global SIZE_SECTION, SIZE_VALUE, SIZE_BODY, SIZE_METER, SIZE_CONTROL
     global BASE_FONT_PT, UI_SCALE
+    _apply_palette(mode)
     UI_SCALE = float(scale)
     SIZE_SECTION = f"{_scaled_px(_BASE_SIZE_PX['SIZE_SECTION'], UI_SCALE)}px"
     SIZE_VALUE = f"{_scaled_px(_BASE_SIZE_PX['SIZE_VALUE'], UI_SCALE)}px"
@@ -148,7 +235,8 @@ def apply_theme(app: QApplication, scale: float = 1.0) -> None:
         "DejaVu Sans Mono", "Menlo", "Consolas", default="monospace",
     )
     app.setFont(QFont(SANS, BASE_FONT_PT))
-    pg.setConfigOptions(background=BG0, foreground=TEXT2, antialias=True)
+    # pyqtgraph 全局画布 = CANVAS_BG (恒浅), 无论 UI mode 怎么切
+    pg.setConfigOptions(background=CANVAS_BG, foreground=CANVAS_TEXT_MUTED, antialias=True)
     qss = QSS_TEMPLATE.format(
         BG0=BG0, BG1=BG1, BG2=BG2,
         BORDER0=BORDER0, BORDER1=BORDER1,

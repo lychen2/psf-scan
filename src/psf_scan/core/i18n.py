@@ -494,6 +494,17 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "切换 UI 缩放需要重启应用生效。4K 屏建议 150%—175%。",
         "en": "Restart required after changing UI scale. 150%–175% recommended on 4K screens.",
     },
+    "settings.theme": {"zh": "界面主题", "en": "Theme"},
+    "settings.theme_light": {"zh": "浅色 (默认)", "en": "Light (default)"},
+    "settings.theme_dark": {"zh": "深色", "en": "Dark"},
+    "settings.theme_restart_hint": {
+        "zh": "切换主题需要重启应用生效。仅改面板/按钮等界面色,数据画布(PSF、相机、位移台)始终保持浅色以保证 colormap 准确。",
+        "en": "Restart required after switching theme. Only UI chrome changes; data canvases (PSF, camera, stage) stay light to keep colormap fidelity.",
+    },
+    "tip.settings_theme": {
+        "zh": "在浅色和深色 UI 之间切换,数据画布永远保持浅色。",
+        "en": "Switch UI chrome between light and dark. Data canvases stay light regardless.",
+    },
     "settings.timeseries_section": {"zh": "时间序列扫描", "en": "Time-series scan"},
     "settings.timeseries_repeat": {"zh": "重复次数", "en": "Repeat count"},
     "settings.timeseries_interval": {"zh": "间隔 (分钟)", "en": "Interval (min)"},
@@ -693,6 +704,32 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "请盖住镜头或关闭光源。确认后将采集 50 帧并取中位数生成暗场文件。",
         "en": "Cover the lens or turn off illumination. 50 frames will be captured and median-stacked.",
     },
+    "calibration.dark_lens_cap_prompt": {
+        "zh": "请先盖上镜头或关闭光源。系统会按 [相机触发→相机出厂校准→软件拍照] 三层尝试,自动选第一个能用的。确认开始?",
+        "en": "Cover the lens or turn off illumination. System will try [camera trigger → camera factory baked → software capture] in order. Continue?",
+    },
+    "calibration.dark_trigger_ok": {
+        "zh": "相机已记录暗场 (节点: {node})。后续帧在相机内部减基线,不需要保存文件。",
+        "en": "Camera recorded dark internally (node: {node}). On-chip correction; no file needed.",
+    },
+    "calibration.dark_enable_ok": {
+        "zh": "相机使用出厂烧录的暗场 (节点: {node})。已就绪,不需要采集文件。",
+        "en": "Camera uses factory-baked dark (node: {node}). Ready; no capture needed.",
+    },
+    "calibration.dark_status_off": {"zh": "暗场: 未启用", "en": "dark: off"},
+    "calibration.dark_status_trigger": {
+        "zh": "暗场来源: 相机内部 (触发型 · {node})",
+        "en": "dark source: on-camera (trigger · {node})",
+    },
+    "calibration.dark_status_enable": {
+        "zh": "暗场来源: 相机内部 (出厂校准 · {node})",
+        "en": "dark source: on-camera (factory · {node})",
+    },
+    "calibration.dark_status_software": {
+        "zh": "暗场来源: 软件减法 (文件: {file})",
+        "en": "dark source: software (file: {file})",
+    },
+    "calibration.dark_calibrate_button": {"zh": "校准暗场…", "en": "Calibrate dark…"},
     "calibration.flat_prompt": {
         "zh": "请切到均匀照明并移除样品结构。确认后将采集 50 帧并取中位数生成平场文件。",
         "en": "Use uniform illumination and remove sample structure. 50 frames will be captured and median-stacked.",

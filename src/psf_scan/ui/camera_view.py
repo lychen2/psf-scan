@@ -82,7 +82,7 @@ class CameraView(QWidget):
         self._iv.ui.roiBtn.hide()
         self._iv.view.setAspectLocked(True)
         self._iv.view.invertY(True)
-        self._iv.view.setBackgroundColor(theme.BG0)
+        self._iv.view.setBackgroundColor(theme.CANVAS_BG)
         # 框选缩放 (rubberband): 左键拖矩形 zoom; 右键拖平移; 双击重置
         self._iv.view.setMouseMode(pg.ViewBox.RectMode)
         self._cmap_name = DEFAULT_CMAP
