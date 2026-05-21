@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -123,16 +123,16 @@ def load_calibration_frame(path: str | Path, *, expected_kind: str) -> Calibrati
 
 def config_from_settings(settings, camera: CameraBase) -> CalibrationConfig:
     raw = settings.calibration_config()
-    dark = _load_enabled(raw["dark_enabled"], raw["dark_path"], "dark")
+    dark = _load_optional_dark(raw["dark_enabled"], raw["dark_path"])
     flat = _load_enabled(raw["flat_enabled"], raw["flat_path"], "flat")
-    config = CalibrationConfig(**raw, dark=dark, flat=flat)
-    validate_config(config, camera)
-    return config
+    return CalibrationConfig(**raw, dark=dark, flat=flat)
 
 
 def validate_config(config: CalibrationConfig, camera: CameraBase) -> None:
     if config.flat_enabled and config.flat_mode != "intensity":
         raise ValueError("当前平场模式不是普通强度平场，拒绝做除法校正")
+    if config.dark_enabled and not config.hardware_dark_active and config.dark is None:
+        raise ValueError("已启用 dark, 但未选择校正文件")
     signature = camera_signature(camera)
     frames = [f for f in (config.dark, config.flat) if f is not None]
     for frame in frames:
@@ -177,6 +177,12 @@ def _load_enabled(enabled: bool, path: str, kind: str) -> CalibrationFrame | Non
     return load_calibration_frame(path, expected_kind=kind)
 
 
+def _load_optional_dark(enabled: bool, path: str) -> CalibrationFrame | None:
+    if not enabled or not path:
+        return None
+    return load_calibration_frame(path, expected_kind="dark")
+
+
 def _validate_signature(frame: CalibrationFrame, signature: dict[str, Any]) -> None:
     for key in ("exposure_us", "gain", "pixel_format", "bit_depth"):
         if frame.metadata.get(key) != signature[key]:
@@ -186,8 +192,7 @@ def _validate_signature(frame: CalibrationFrame, signature: dict[str, Any]) -> N
 def _validate_flat(config: CalibrationConfig) -> None:
     if config.flat is None:
         return
-    dark = _dark_array(config, config.flat.data.shape)
-    denominator = config.flat.data - dark
+    denominator = _flat_denominator(config)
     bad_ratio = float(np.mean(denominator <= FLAT_EPS))
     if bad_ratio > MAX_BAD_FLAT_RATIO:
         raise ValueError(f"平场过暗或含无效像素过多: {bad_ratio:.3%}")
@@ -205,6 +210,15 @@ def _dark_array(config: CalibrationConfig, shape: tuple[int, ...]) -> np.ndarray
     if tuple(config.dark.data.shape) != tuple(shape):
         raise ValueError("暗场校正文件尺寸与当前帧不匹配")
     return config.dark.data
+
+
+def _flat_denominator(config: CalibrationConfig) -> np.ndarray:
+    if config.flat is None:
+        raise ValueError("已启用平场校正，但未加载平场文件")
+    if config.hardware_dark_active:
+        return config.flat.data
+    dark = _dark_array(config, config.flat.data.shape)
+    return config.flat.data - dark
 
 
 def _max_value(frame: CalibrationFrame) -> float:

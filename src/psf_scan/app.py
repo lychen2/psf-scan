@@ -18,7 +18,12 @@ from PySide6.QtWidgets import (
 )
 
 from .core.camera import AVAILABLE_CAMERAS, CameraBase, make_camera
-from .core.calibration import CalibrationConfig, apply_calibration, config_from_settings
+from .core.calibration import (
+    CalibrationConfig,
+    apply_calibration,
+    config_from_settings,
+    validate_config,
+)
 from .core.data_io import (
     StreamingScanWriter, finalize_streamed_scan, find_orphan_scans, save_scan,
 )
@@ -366,9 +371,10 @@ class MainWindow(QMainWindow):
             _log.warning("restore camera settings failed: %s", exc)
         # 校正配置失败不阻断连接: 跑无校正模式, 警告用户后续可改设置
         try:
-            self._calibration_config = self._engage_hardware_dark(
-                config_from_settings(self._settings, camera), camera=camera
-            )
+            cfg = config_from_settings(self._settings, camera)
+            cfg = self._engage_hardware_dark(cfg, camera=camera)
+            validate_config(cfg, camera)
+            self._calibration_config = cfg
         except Exception as exc:  # noqa: BLE001
             _log.warning("calibration config failed (running without correction): %s", exc)
             self._calibration_config = None
@@ -474,6 +480,8 @@ class MainWindow(QMainWindow):
             return True
         try:
             cfg = config_from_settings(self._settings, self._camera)
+            cfg = self._engage_hardware_dark(cfg)
+            validate_config(cfg, self._camera)
         except Exception as exc:  # noqa: BLE001
             self._calibration_config = None
             # 软件路径失败也要把硬件路径关掉, 避免相机被遗留在 NUCEnable=True
@@ -484,7 +492,7 @@ class MainWindow(QMainWindow):
             if show_errors:
                 QMessageBox.warning(self, tr("common.error"), tr("calibration.failed", msg=str(exc)))
             return False
-        self._calibration_config = self._engage_hardware_dark(cfg)
+        self._calibration_config = cfg
         return True
 
     def _engage_hardware_dark(

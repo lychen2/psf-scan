@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
 from psf_scan.core.calibration import (
     CalibrationConfig,
     apply_calibration,
+    config_from_settings,
     capture_calibration_frame,
     load_calibration_frame,
     save_calibration_frame,
@@ -113,6 +116,55 @@ def test_validate_rejects_camera_mismatch():
 
     with pytest.raises(ValueError, match="exposure_us"):
         validate_config(config, DummyCamera([]))
+
+
+def test_hardware_dark_config_allows_empty_software_path():
+    config = config_from_settings(DummySettings(dark_enabled=True), DummyCamera([]))
+
+    with pytest.raises(ValueError, match="未选择校正文件"):
+        validate_config(config, DummyCamera([]))
+
+    hardware_config = replace(
+        config,
+        hardware_dark_active=True,
+        hardware_dark_node="NUCEnable",
+    )
+    validate_config(hardware_config, DummyCamera([]))
+
+
+def test_validate_flat_with_hardware_dark_does_not_require_dark_file():
+    flat = _frame("flat", np.full((2, 2), 100, dtype=np.float32))
+    config = CalibrationConfig(
+        dark_enabled=True,
+        flat_enabled=True,
+        flat_mode="intensity",
+        flat=flat,
+        hardware_dark_active=True,
+        hardware_dark_node="NUCEnable",
+    )
+
+    validate_config(config, DummyCamera([]))
+
+
+class DummySettings:
+    def __init__(
+        self,
+        *,
+        dark_enabled: bool = False,
+        flat_enabled: bool = False,
+        dark_path: str = "",
+        flat_path: str = "",
+    ) -> None:
+        self._config = {
+            "dark_enabled": dark_enabled,
+            "flat_enabled": flat_enabled,
+            "dark_path": dark_path,
+            "flat_path": flat_path,
+            "flat_mode": "intensity",
+        }
+
+    def calibration_config(self) -> dict:
+        return dict(self._config)
 
 
 def _frame(kind: str, data: np.ndarray, *, exposure_us: int = 1000):
