@@ -117,6 +117,9 @@ class PSFView(QWidget):
             self._live_refresh.start()
             return
         self._live_refresh.stop()
+        if not self.isVisible():
+            self._render_pending = True
+            return
         self._refresh_render()
 
     def _ensure_stack(self, frame: np.ndarray) -> None:

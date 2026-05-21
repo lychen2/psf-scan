@@ -3,7 +3,8 @@
 QSS 模板见 ``_qss.py``。
 - 浅色 (light): 默认,符合 PRODUCT.md 的"暖中性浅画布"原则。
 - 深色 (dark): 暖深底 UI chrome (面板 / 按钮 / 文本),给夜间或长时间观看用。
-  PSF / 相机 / stage 图等画布区永远保持浅色,colormap 由 viridis 等表达;
+  PSF / stage 等后续绘图画布区保持浅色,colormap 由 viridis 等表达;
+  相机预览画布跟随主题,便于暗场观察。
   深色只切 chrome,不污染数据可读性。
 """
 

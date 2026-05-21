@@ -480,6 +480,10 @@ class SettingsDialog(QDialog):
             self, tr("settings.title"), tr("calibration.dark_lens_cap_prompt")
         ) != QMessageBox.Yes:
             return
+        if self._camera.hardware_dark_active:
+            self._capture_calibration(edit, kind="dark", prompt=tr("calibration.dark_prompt"))
+            self._refresh_dark_status()
+            return
         # 1) 触发型 NUC
         node = self._camera.trigger_hardware_dark_calibration()
         if node:
@@ -514,7 +518,16 @@ class SettingsDialog(QDialog):
         if not self.chk_dark.isChecked():
             self.lbl_dark_status.setText(tr("calibration.dark_status_off"))
             return
-        if self._dark_hw_kind == "trigger" and self._dark_hw_node:
+        path = self.le_dark.text().strip()
+        if self._dark_hw_node and path:
+            self.lbl_dark_status.setText(
+                tr(
+                    "calibration.dark_status_hardware_residual",
+                    node=self._dark_hw_node,
+                    file=path,
+                )
+            )
+        elif self._dark_hw_kind == "trigger" and self._dark_hw_node:
             self.lbl_dark_status.setText(
                 tr("calibration.dark_status_trigger", node=self._dark_hw_node)
             )
@@ -523,7 +536,7 @@ class SettingsDialog(QDialog):
                 tr("calibration.dark_status_enable", node=self._dark_hw_node)
             )
         else:
-            path = self.le_dark.text().strip() or "—"
+            path = path or "—"
             self.lbl_dark_status.setText(
                 tr("calibration.dark_status_software", file=path)
             )

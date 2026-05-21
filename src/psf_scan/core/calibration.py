@@ -18,6 +18,8 @@ DEFAULT_FRAME_COUNT = 50
 FLAT_EPS = 1.0e-6
 MAX_BAD_FLAT_RATIO = 0.001
 MAX_SATURATED_FLAT_RATIO = 0.001
+MIN_DISPLAY_WHITE_LEVEL = 1.0
+SENSOR_SATURATION_FRACTION = 0.99
 
 
 @dataclass(frozen=True)
@@ -41,9 +43,8 @@ class CalibrationConfig:
     flat_mode: str = "intensity"
     dark: CalibrationFrame | None = None
     flat: CalibrationFrame | None = None
-    # 由 app 层在引擎握手后注入: 相机已通过 SDK 接管暗场补偿时, 软件路径
-    # 必须跳过 ``data - dark`` (硬件已经在帧出相机前减好了), 同时也得绕开
-    # flat 分支里的 ``denominator = flat - dark`` -- 否则会双重减.
+    # 由 app 层在引擎握手后注入: 相机已通过 SDK 接管暗场补偿时,
+    # 没有软件 dark 文件则零减法; 若用户加载 dark 文件, 视为残余暗场继续扣除.
     hardware_dark_active: bool = False
     hardware_dark_node: str | None = None
 
@@ -143,17 +144,6 @@ def validate_config(config: CalibrationConfig, camera: CameraBase) -> None:
 
 def apply_calibration(frame: np.ndarray, config: CalibrationConfig) -> np.ndarray:
     data = np.asarray(frame, dtype=np.float32)
-    # 硬件已接管暗场: 相机出来的 data / flat 都不含 dark 基线, 软件零减法.
-    if config.hardware_dark_active:
-        if config.flat_enabled:
-            if config.flat is None:
-                raise ValueError("已启用平场校正，但未加载平场文件")
-            if tuple(config.flat.data.shape) != tuple(data.shape):
-                raise ValueError("平场校正文件尺寸与当前帧不匹配")
-            denominator = config.flat.data
-            corrected = data / np.maximum(denominator, FLAT_EPS)
-            return corrected * float(np.mean(denominator))
-        return data
     dark = _dark_array(config, data.shape)
     if config.flat_enabled:
         if config.flat is None:
@@ -167,6 +157,20 @@ def apply_calibration(frame: np.ndarray, config: CalibrationConfig) -> np.ndarra
     if config.dark_enabled:
         return data - dark
     return data
+
+
+def calibrated_white_level(raw_white_level: int | float, config: CalibrationConfig | None) -> float:
+    """Global display white after software residual dark subtraction."""
+    white = float(raw_white_level)
+    if config is None or not config.dark_enabled or config.dark is None:
+        return white
+    residual = float(np.nanmedian(config.dark.data))
+    return max(MIN_DISPLAY_WHITE_LEVEL, white - residual)
+
+
+def is_sensor_saturated(frame: np.ndarray, raw_white_level: int | float) -> bool:
+    peak = float(np.nanmax(np.asarray(frame)))
+    return peak >= float(raw_white_level) * SENSOR_SATURATION_FRACTION
 
 
 def _load_enabled(enabled: bool, path: str, kind: str) -> CalibrationFrame | None:
@@ -206,6 +210,8 @@ def _dark_array(config: CalibrationConfig, shape: tuple[int, ...]) -> np.ndarray
     if not config.dark_enabled:
         return np.zeros(shape, dtype=np.float32)
     if config.dark is None:
+        if config.hardware_dark_active:
+            return np.zeros(shape, dtype=np.float32)
         raise ValueError("已启用暗场校正，但未加载暗场文件")
     if tuple(config.dark.data.shape) != tuple(shape):
         raise ValueError("暗场校正文件尺寸与当前帧不匹配")
@@ -215,8 +221,6 @@ def _dark_array(config: CalibrationConfig, shape: tuple[int, ...]) -> np.ndarray
 def _flat_denominator(config: CalibrationConfig) -> np.ndarray:
     if config.flat is None:
         raise ValueError("已启用平场校正，但未加载平场文件")
-    if config.hardware_dark_active:
-        return config.flat.data
     dark = _dark_array(config, config.flat.data.shape)
     return config.flat.data - dark
 

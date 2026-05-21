@@ -13,6 +13,7 @@ import pyqtgraph as pg
 from PySide6.QtCore import QObject, QRunnable, Signal
 from scipy.ndimage import gaussian_filter, zoom
 
+from .colormap_resolver import resolve_or_default
 from .psf_render import MIN_THRESHOLD, RenderOptions, VOLUME_STYLE_SLICES, VOLUME_STYLE_SURFACE
 from .psf_volume_geometry import axis_scale, display_vertices, render_z_positions
 from .psf_volume_solid import solid_slice_layers
@@ -25,8 +26,6 @@ FAST_MIN_Z = 2
 SMOOTH_SIGMA = (0.45, 0.25, 0.25)
 VOLUME_BG = "#f7f5ef"
 VOLUME_GRID = "#c8d5d7"
-SURFACE_SCALE = ("#f0a6a0", "#db7069", "#b84642", "#842a2d", "#4d161e", "#000000")
-
 # fast 常规情况下不改数据网格，极大体数据才只沿 Z 减层。
 MAX_VOXELS_FAST = 8 * 1024 * 1024
 # fine 上限，避免 2x 三轴插值把内存冲到不可控。
@@ -152,12 +151,11 @@ def layer_alpha(index: int, layer_count: int) -> float:
     return 0.20 + 0.80 * t  # 外 0.20 → 内 1.00
 
 
-def layer_color(index: int, layer_count: int, alpha: float) -> tuple[float, float, float, float]:
-    """单层用外层色（用户 iso 是外壳）；多层从浅红渐到近黑。"""
-    if layer_count <= 1:
-        return _rgba(SURFACE_SCALE[1], alpha)
-    palette_idx = round(index / max(1, layer_count - 1) * (len(SURFACE_SCALE) - 1))
-    return _rgba(SURFACE_SCALE[palette_idx], alpha)
+def layer_color(level: float, alpha: float, cmap_name: str) -> tuple[float, float, float, float]:
+    """Map normalized iso level through the selected PSF colormap."""
+    cmap = resolve_or_default(cmap_name)
+    color = cmap.map([float(np.clip(level, 0.0, 1.0))], mode="float")[0]
+    return (float(color[0]), float(color[1]), float(color[2]), float(alpha))
 
 
 def _normalized_volume(volume: np.ndarray, levels: tuple[float, float]) -> np.ndarray:
@@ -195,11 +193,6 @@ def _maybe_upsample_fine(
     if z_factor <= 1.01 and xy_factor <= 1.01:
         return volume
     return zoom(volume, (z_factor, xy_factor, xy_factor), order=1).astype(np.float32, copy=False)
-
-
-def _rgba(hex_color: str, alpha: float) -> tuple[float, float, float, float]:
-    color = pg.mkColor(hex_color)
-    return (color.redF(), color.greenF(), color.blueF(), alpha)
 
 
 # ── 后台等值面 worker ───────────────────────────────────────
@@ -271,7 +264,7 @@ class IsosurfaceWorker(QRunnable):
                 if len(vertices) == 0 or len(faces) == 0:
                     continue
                 alpha = layer_alpha(index, count) * self._options.volume_alpha
-                color = layer_color(index, count, alpha)
+                color = layer_color(float(level), alpha, self._options.volume_cmap)
                 disp = display_vertices(
                     vertices,
                     data.shape,

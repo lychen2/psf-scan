@@ -1,4 +1,4 @@
-"""实时相机画面 — 浅色绘图画布 + 曝光 / 增益 / 饱和指示。"""
+"""实时相机画面 — 主题画布 + 曝光 / 增益 / 饱和指示。"""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ from .camera_advanced import CameraAdvancedBar
 from .colormap_resolver import resolve_colormap as _resolve_colormap
 from .motion import flash
 from .sparkline import Sparkline
+from ..core.calibration import is_sensor_saturated
 from ..core.pixel_calibration import from_settings as pixel_calibration_from_settings
 from ..core.sharpness import brenner
 from ..core.i18n import tr
@@ -82,7 +83,7 @@ class CameraView(QWidget):
         self._iv.ui.roiBtn.hide()
         self._iv.view.setAspectLocked(True)
         self._iv.view.invertY(True)
-        self._iv.view.setBackgroundColor(theme.CANVAS_BG)
+        self._iv.view.setBackgroundColor(theme.BG0)
         # 框选缩放 (rubberband): 左键拖矩形 zoom; 右键拖平移; 双击重置
         self._iv.view.setMouseMode(pg.ViewBox.RectMode)
         self._cmap_name = DEFAULT_CMAP
@@ -281,10 +282,20 @@ class CameraView(QWidget):
         self._image_stack.setCurrentWidget(self._empty)
 
     @Slot(object, float)
-    def update_frame(self, frame: np.ndarray, ts: float) -> None:
+    def update_frame(
+        self,
+        frame: np.ndarray,
+        ts: float,
+        saturated: bool | None = None,
+        display_white_level: float | None = None,
+    ) -> None:
         started = time.perf_counter()
         try:
-            self._update_frame(frame)
+            self._update_frame(
+                frame,
+                saturated=saturated,
+                display_white_level=display_white_level,
+            )
         finally:
             self._record_display_time((time.perf_counter() - started) * 1000.0)
             self.frame_displayed.emit()
@@ -305,6 +316,9 @@ class CameraView(QWidget):
             return None
         return np.array(self._last_raw_frame, copy=True)
 
+    def max_value(self) -> int:
+        return int(self._max_val)
+
     def _record_display_time(self, elapsed_ms: float) -> None:
         self._displayed_frames += 1
         self._display_last_ms = elapsed_ms
@@ -317,12 +331,35 @@ class CameraView(QWidget):
         self._fps_dirty = False
         self._fps_lbl.setText(tr("camera.fps_val", fps=self._fps))
 
-    def _update_frame(self, frame: np.ndarray) -> None:
+    def _update_frame(
+        self,
+        frame: np.ndarray,
+        saturated: bool | None,
+        display_white_level: float | None,
+    ) -> None:
         self._image_stack.setCurrentWidget(self._iv)
         self._last_raw_frame = frame
-        if not self.btn_snapshot.isEnabled():
-            self.btn_snapshot.setEnabled(True)
-            self.btn_record.setEnabled(True)
+        self._enable_frame_actions()
+        self._update_fps()
+        self._show_frame(frame, display_white_level)
+
+        if not self._levels_set:
+            self._levels_set = True
+        peak = int(frame.max())
+        self._update_frame_metrics(frame, peak)
+        sat = saturated if saturated is not None else is_sensor_saturated(frame, self._max_val)
+        self._update_saturation_badge(sat)
+        self.metrics_changed.emit(peak, self._fps, sat)
+        if self._line_roi is not None:
+            self._refresh_line_profile()
+
+    def _enable_frame_actions(self) -> None:
+        if self.btn_snapshot.isEnabled():
+            return
+        self.btn_snapshot.setEnabled(True)
+        self.btn_record.setEnabled(True)
+
+    def _update_fps(self) -> None:
         now = time.perf_counter()
         if self._last_frame_t is not None:
             dt = now - self._last_frame_t
@@ -332,41 +369,47 @@ class CameraView(QWidget):
         self._last_frame_t = now
         self._fps_dirty = True
 
-        if not self._levels_set:
-            self._iv.setImage(
-                frame.T, autoLevels=False,
-                levels=(0, self._max_val), autoHistogramRange=False,
-            )
-            self._levels_set = True
-        else:
+    def _show_frame(self, frame: np.ndarray, display_white_level: float | None) -> None:
+        levels = (0, self._display_white_level(display_white_level))
+        if self._levels_set:
             self._iv.setImage(
                 frame.T, autoLevels=False, autoRange=False,
-                levels=(0, self._max_val), autoHistogramRange=False,
+                levels=levels, autoHistogramRange=False,
             )
+            return
+        self._iv.setImage(
+            frame.T, autoLevels=False,
+            levels=levels, autoHistogramRange=False,
+        )
 
-        peak = int(frame.max())
+    def _update_frame_metrics(self, frame: np.ndarray, peak: int) -> None:
         h, w = frame.shape[:2]
         self._size_lbl.setText(tr("camera.image_dims", w=w, h=h))
         self._peak_lbl.setText(tr("camera.peak_val", val=peak))
-        # Brenner + sparkline 只在 line-profile 工具开着时才需要 — 默认隐藏
-        # 状态下省掉每帧 ~16 MB/s 的 float32 复制与四次大数组运算。
         if self._line_roi is not None:
-            score = brenner(frame)
-            self._sharpness_window.append(score)
-            self._sharpness_spark.push(score)
-            best = max(self._sharpness_window) if self._sharpness_window else score
-            self._sharpness_lbl.setText(f"sharp {score:.1f} / max {best:.1f}")
-        # 饱和：≥ 99% 满量程 视为饱和; 只在翻转时碰 visibility / 位置 / 闪烁。
-        sat = peak >= int(self._max_val * 0.99)
+            self._update_sharpness(frame)
+
+    def _update_sharpness(self, frame: np.ndarray) -> None:
+        score = brenner(frame)
+        self._sharpness_window.append(score)
+        self._sharpness_spark.push(score)
+        best = max(self._sharpness_window) if self._sharpness_window else score
+        self._sharpness_lbl.setText(f"sharp {score:.1f} / max {best:.1f}")
+
+    def _update_saturation_badge(self, sat: bool) -> None:
         if sat != self._saturated:
             self._sat_badge.setVisible(sat)
             if sat:
                 self._position_sat_badge()
                 flash(self._sat_badge, low=0.2)
         self._saturated = sat
-        self.metrics_changed.emit(peak, self._fps, sat)
-        if self._line_roi is not None:
-            self._refresh_line_profile()
+
+    def _display_white_level(self, value: float | None) -> float:
+        if value is None:
+            return float(self._max_val)
+        if not np.isfinite(value) or value <= 0:
+            raise ValueError(f"invalid display white level: {value!r}")
+        return float(value)
 
     # ── colormap ─────────────────────────────────────────
     def _apply_colormap(self, name: str) -> None:

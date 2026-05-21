@@ -9,7 +9,7 @@ from typing import ClassVar, Optional
 import numpy as np
 from PySide6.QtCore import QObject, Signal
 
-from .calibration import CalibrationConfig, apply_calibration
+from .calibration import CalibrationConfig, apply_calibration, is_sensor_saturated
 from .camera import CameraBase
 from .stage import StageBase
 
@@ -96,7 +96,7 @@ class Scanner(QObject):
     """扫描 worker。``run`` 在自己的 QThread 里执行。"""
 
     progress = Signal(int, int, float, float, float)   # idx_1based, total, x, y, z
-    frame_acquired = Signal(int, float, float, float, object)  # idx_0based, x, y, z, frame
+    frame_acquired = Signal(int, float, float, float, object, bool)
     finished = Signal(object)  # ScanResult
     canceled = Signal(int)     # 已采集帧数 (>=0)
     error = Signal(str)
@@ -162,6 +162,7 @@ class Scanner(QObject):
                     self.frame_acquired.emit(
                         idx, float(x), float(y), float(z),
                         corrected if corrected is not None else frame,
+                        self._is_sensor_saturated(frame),
                     )
             except ScanCanceled:
                 pass
@@ -247,6 +248,9 @@ class Scanner(QObject):
         if self._calibration is None or not self._calibration.enabled:
             return None
         return apply_calibration(frame, self._calibration).astype(np.float32, copy=False)
+
+    def _is_sensor_saturated(self, frame: np.ndarray) -> bool:
+        return is_sensor_saturated(frame, (1 << int(self._camera.bit_depth())) - 1)
 
     def _sleep_until(self, deadline: float) -> None:
         while not self._cancel:

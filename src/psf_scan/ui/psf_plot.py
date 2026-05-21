@@ -18,6 +18,8 @@ PLOT_BG = "#f7f5ef"
 PLOT_AXIS = "#626a6c"
 PLOT_TITLE = "#171a1c"
 LOCATOR = "#2f73a3"
+COLORBAR_WIDTH = 14
+COLORBAR_COLUMN_WIDTH = 42
 
 
 class PsfPlotWidget(QWidget):
@@ -97,6 +99,7 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         self.setBackground(PLOT_BG)
         self._plots: dict[int, object] = {}
         self._items: dict[int, pg.ImageItem] = {}
+        self._colorbars: dict[int, pg.ColorBarItem] = {}
         self._locator_items: dict[int, list] = {}
         self._rects: dict[int, tuple[float, float, float, float]] = {}
         self._locators: list[object] = []
@@ -139,6 +142,7 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         rects = self._rects.copy()
         self._clear_items(clear_rects=False)
         self._items = {}
+        self._colorbars = {}
         self._locator_items = {}
         for index, image in enumerate(images):
             plot = self.addPlot(row=0, col=index * 2)
@@ -158,7 +162,13 @@ class ImageSurface(pg.GraphicsLayoutWidget):
             if self._rect_zoom:
                 plot.getViewBox().setMouseMode(pg.ViewBox.RectMode)
             if options.show_colorbar:
-                _add_colorbar(self, col=index * 2 + 1, item=item, cmap=cmap, levels=levels)
+                self._colorbars[index] = _add_colorbar(
+                    self,
+                    col=index * 2 + 1,
+                    item=item,
+                    cmap=cmap,
+                    levels=levels,
+                )
 
     def _update_images(self, images, levels, cmap, options) -> None:
         """复用现有 plot/ImageItem, 仅 setImage 数据 — 避免 GraphicsLayout rebuild 抖动。"""
@@ -181,6 +191,8 @@ class ImageSurface(pg.GraphicsLayoutWidget):
                     i for i in plot.items if i.property("role") == "locator"
                 ]
             self._rects[index] = image.rect
+            if options.show_colorbar:
+                _update_colorbar(self._colorbars[index], item=item, cmap=cmap, levels=levels)
 
     def clear(self) -> None:
         self._clear_items(clear_rects=True)
@@ -205,6 +217,7 @@ class ImageSurface(pg.GraphicsLayoutWidget):
         self._locators = []
         self._plots = {}
         self._items = {}
+        self._colorbars = {}
         self._locator_items = {}
         self._last_mode = None
         if clear_rects:
@@ -279,17 +292,32 @@ def _add_locator(plot, locator: tuple[float, float]) -> None:
     plot.addItem(line_y)
 
 
-def _add_colorbar(layout, *, col: int, item, cmap, levels: tuple[float, float]) -> None:
+def _add_colorbar(layout, *, col: int, item, cmap, levels: tuple[float, float]) -> pg.ColorBarItem:
     bar = pg.ColorBarItem(
         values=levels,
         colorMap=cmap,
         label="counts",
-        width=14,
+        width=COLORBAR_WIDTH,
         pen=theme.BORDER1,
         hoverPen=theme.ACCENT,
+        interactive=False,
     )
     bar.setImageItem(item)
     layout.addItem(bar, row=0, col=col)
+    layout.ci.layout.setColumnFixedWidth(col, COLORBAR_COLUMN_WIDTH)
+    return bar
+
+
+def _update_colorbar(
+    bar: pg.ColorBarItem,
+    *,
+    item: pg.ImageItem,
+    cmap,
+    levels: tuple[float, float],
+) -> None:
+    bar.setColorMap(cmap)
+    bar.setLevels(values=levels)
+    bar.setImageItem(item)
 
 
 def _view_ranges(plots: dict[int, object]) -> dict[int, list[list[float]]]:

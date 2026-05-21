@@ -367,8 +367,8 @@ _DICT: dict[str, dict[str, str]] = {
     "tip.settings_data_choose": {"zh": "选择新的数据保存目录", "en": "Choose a new data folder"},
     "tip.settings_data_open": {"zh": "用系统文件管理器打开当前数据目录", "en": "Open current data folder"},
     "tip.calibration_dark_enable": {
-        "zh": "启用后预览和扫描都会先减去暗场（Dark）背景；文件不匹配时拒绝使用",
-        "en": "Subtract dark background in preview and scans; mismatched files are refused",
+        "zh": "启用后预览和扫描都会减去暗场背景；相机硬件暗场已开启时，暗场文件会作为残余暗场继续扣除",
+        "en": "Subtract dark background in preview and scans; with hardware dark active, a dark file is applied as residual dark",
     },
     "tip.calibration_flat_enable": {
         "zh": "启用后用平场（Flat）修正照明和像素响应不均；扫描仍保留原始帧",
@@ -724,6 +724,10 @@ _DICT: dict[str, dict[str, str]] = {
     "calibration.dark_status_enable": {
         "zh": "暗场来源: 相机内部 (出厂校准 · {node})",
         "en": "dark source: on-camera (factory · {node})",
+    },
+    "calibration.dark_status_hardware_residual": {
+        "zh": "暗场来源: 相机内部 ({node}) + 软件残余 (文件: {file})",
+        "en": "dark source: on-camera ({node}) + software residual (file: {file})",
     },
     "calibration.dark_status_software": {
         "zh": "暗场来源: 软件减法 (文件: {file})",

@@ -8,8 +8,10 @@ import pytest
 from psf_scan.core.calibration import (
     CalibrationConfig,
     apply_calibration,
+    calibrated_white_level,
     config_from_settings,
     capture_calibration_frame,
+    is_sensor_saturated,
     load_calibration_frame,
     save_calibration_frame,
     validate_config,
@@ -73,8 +75,8 @@ def test_apply_dark_flat_calibration():
     np.testing.assert_allclose(corrected, np.full((2, 2), 50, dtype=np.float32))
 
 
-def test_apply_skips_software_dark_when_hardware_active():
-    """硬件接管后软件路径必须零减法 -- 即便 dark file 已加载."""
+def test_hardware_dark_allows_residual_software_dark():
+    """硬件暗场后若加载 dark file, 继续视为残余暗场扣除."""
     dark = _frame("dark", np.full((2, 2), 10, dtype=np.float32))
     config = CalibrationConfig(
         dark_enabled=True,
@@ -86,11 +88,24 @@ def test_apply_skips_software_dark_when_hardware_active():
 
     corrected = apply_calibration(raw, config)
 
+    np.testing.assert_allclose(corrected, np.full((2, 2), 50, dtype=np.float32))
+
+
+def test_hardware_dark_without_file_keeps_zero_subtraction():
+    config = CalibrationConfig(
+        dark_enabled=True,
+        hardware_dark_active=True,
+        hardware_dark_node="NUCEnable",
+    )
+    raw = np.full((2, 2), 60, dtype=np.float32)
+
+    corrected = apply_calibration(raw, config)
+
     np.testing.assert_allclose(corrected, raw)
 
 
-def test_apply_flat_without_software_dark_when_hardware_active():
-    """硬件 dark + flat 时 denominator 不应再减 dark."""
+def test_hardware_dark_flat_allows_residual_software_dark():
+    """硬件 dark + flat 后加载 dark file 时, numerator/denominator 都扣残余暗场."""
     dark = _frame("dark", np.full((2, 2), 10, dtype=np.float32))
     flat = _frame("flat", np.full((2, 2), 100, dtype=np.float32))
     config = CalibrationConfig(
@@ -106,8 +121,23 @@ def test_apply_flat_without_software_dark_when_hardware_active():
 
     corrected = apply_calibration(raw, config)
 
-    # data / flat * mean(flat) = 50 / 100 * 100 = 50
-    np.testing.assert_allclose(corrected, np.full((2, 2), 50, dtype=np.float32))
+    # (50 - 10) / (100 - 10) * mean(90) = 40
+    np.testing.assert_allclose(corrected, np.full((2, 2), 40, dtype=np.float32))
+
+
+def test_calibrated_white_level_tracks_residual_dark():
+    dark = _frame("dark", np.full((2, 2), 100, dtype=np.float32))
+    config = CalibrationConfig(dark_enabled=True, dark=dark)
+
+    assert calibrated_white_level(4095, config) == 3995
+
+
+def test_sensor_saturation_uses_raw_white_level_not_corrected_peak():
+    raw = np.array([[0, 4095]], dtype=np.uint16)
+    corrected = raw.astype(np.float32) - 100.0
+
+    assert is_sensor_saturated(raw, 4095)
+    assert not is_sensor_saturated(corrected, 4095)
 
 
 def test_validate_rejects_camera_mismatch():

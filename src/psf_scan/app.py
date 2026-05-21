@@ -21,7 +21,9 @@ from .core.camera import AVAILABLE_CAMERAS, CameraBase, make_camera
 from .core.calibration import (
     CalibrationConfig,
     apply_calibration,
+    calibrated_white_level,
     config_from_settings,
+    is_sensor_saturated,
     validate_config,
 )
 from .core.data_io import (
@@ -452,7 +454,12 @@ class MainWindow(QMainWindow):
     @Slot(object, float)
     def _on_camera_frame(self, frame, ts: float) -> None:
         shown = self._apply_calibration_for_preview(frame)
-        self.cam_view.update_frame(shown, ts)
+        self.cam_view.update_frame(
+            shown,
+            ts,
+            saturated=self._is_sensor_saturated(frame),
+            display_white_level=self._preview_white_level(),
+        )
 
     def _apply_calibration_for_preview(self, frame):
         config = self._calibration_config
@@ -473,6 +480,15 @@ class MainWindow(QMainWindow):
             self.status_strip.set_message(tr("calibration.failed", msg=str(exc)))
             self.statusBar().showMessage(f"calibration · {exc}", 6000)
             return frame
+
+    def _is_sensor_saturated(self, frame) -> bool:
+        return is_sensor_saturated(frame, self.cam_view.max_value())
+
+    def _preview_white_level(self) -> float:
+        return calibrated_white_level(
+            self.cam_view.max_value(),
+            self._calibration_config,
+        )
 
     def _refresh_calibration_config(self, *, show_errors: bool) -> bool:
         if self._camera is None:
@@ -1017,10 +1033,23 @@ class MainWindow(QMainWindow):
         )
         self.status_strip.set_progress(idx_1, total, z)
 
-    @Slot(int, float, float, float, object)
-    def _on_acquired(self, idx_0: int, x: float, y: float, z: float, frame) -> None:
+    @Slot(int, float, float, float, object, bool)
+    def _on_acquired(
+        self,
+        idx_0: int,
+        x: float,
+        y: float,
+        z: float,
+        frame,
+        saturated: bool,
+    ) -> None:
         self.stage_view.mark_done(idx_0)
-        self.cam_view.update_frame(frame, 0.0)
+        self.cam_view.update_frame(
+            frame,
+            0.0,
+            saturated=saturated,
+            display_white_level=self._preview_white_level(),
+        )
         self.psf_view.add_frame(idx_0, frame)
 
     @Slot(object, str)
