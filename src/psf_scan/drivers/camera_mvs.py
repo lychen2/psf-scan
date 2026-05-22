@@ -119,7 +119,12 @@ from ..vendor.MvImport import (  # noqa: E402  ── 必须在设环境变量 /
     PixelType_Gvsp_Mono8,
     PixelType_Gvsp_Mono16,
 )
-from .camera_mvs_features import MVSAdvancedMixin, get_float  # noqa: E402  ── 同上, 需等 env 设完
+from .camera_mvs_features import (  # noqa: E402  ── 同上, 需等 env 设完
+    MVSAdvancedMixin,
+    get_float,
+    resulting_frame_rate,
+    set_frame_rate_value,
+)
 
 
 class MVSCamera(MVSAdvancedMixin, CameraBase):
@@ -142,6 +147,7 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
         self._reset_stream_stats()
         self._stream_thread: Optional[threading.Thread] = None
         self._exposure_us = int(exposure_us)
+        self._target_frame_rate: float | None = None
 
     @property
     def is_connected(self) -> bool:
@@ -242,6 +248,25 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
             if ret != 0:
                 self.error.emit(f"Gain 设置失败: 0x{ret:x}")
 
+    def set_frame_rate(self, fps: float) -> None:
+        self._target_frame_rate = float(fps)
+        if not self._connected:
+            return
+        with self._lock:
+            ok = set_frame_rate_value(self._cam, self._target_frame_rate)
+            actual = self._frame_rate_state_unlocked()
+        if not ok:
+            self.error.emit(f"AcquisitionFrameRate 设置失败: {self._target_frame_rate:.1f} fps")
+            return
+        if actual is None:
+            self.error.emit("AcquisitionFrameRate 已写入,但回读失败")
+            return
+        self.error.emit(
+            f"帧率目标 {self._target_frame_rate:.1f} fps, "
+            f"设备 {actual['device_fps']:.1f} fps, "
+            f"resulting {actual['resulting_fps']:.1f} fps"
+        )
+
     def get_exposure_us(self) -> int:
         if not self._connected:
             return self._exposure_us
@@ -283,17 +308,12 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
         last_reported = ""
         while self._streaming:
             try:
-                wants_preview = self._claim_preview_slot()
-                frame = self._grab_locked(timeout_ms=500, copy_frame=wants_preview)
+                frame = self._grab_locked(timeout_ms=500, copy_frame=True)
                 self._record_grab(frame)
-                if wants_preview:
-                    self._record_emit()
-                    self.frame_ready.emit(frame, time.time())
-                else:
-                    self._record_skip()
+                self._record_emit()
+                self.frame_ready.emit(frame, time.time())
                 consecutive_fails = 0
             except RuntimeError as exc:
-                self._set_preview_pending(False)
                 self._record_fail()
                 consecutive_fails += 1
                 msg = str(exc)
@@ -316,7 +336,7 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def diagnostics(self) -> dict[str, object]:
         with self._stats_lock:
             elapsed = max(1e-6, time.time() - self._stats_started_at)
-            return {
+            data = {
                 "connected": self._connected,
                 "streaming": self._streaming,
                 "grabbed": self._grabbed_frames,
@@ -328,6 +348,27 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
                 "last_dtype": self._last_frame_dtype,
                 "pending": self._preview_pending,
             }
+        data.update(self._frame_rate_diagnostics())
+        return data
+
+    def _frame_rate_diagnostics(self) -> dict[str, object]:
+        if not self._connected:
+            return {"target_fps": self._target_frame_rate}
+        with self._lock:
+            state = self._frame_rate_state_unlocked()
+        if state is None:
+            return {"target_fps": self._target_frame_rate, "device_fps": None, "resulting_fps": None}
+        return {"target_fps": self._target_frame_rate, **state}
+
+    def _frame_rate_state_unlocked(self) -> dict[str, float] | None:
+        state = get_float(self._cam, "AcquisitionFrameRate")
+        if state is None:
+            return None
+        resulting = resulting_frame_rate(self._cam)
+        return {
+            "device_fps": float(state[0]),
+            "resulting_fps": float(resulting if resulting is not None else state[0]),
+        }
 
     def _reset_stream_stats(self) -> None:
         with self._stats_lock:

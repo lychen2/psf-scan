@@ -13,6 +13,7 @@ from typing import Optional
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QHBoxLayout, QVBoxLayout, QWidget
 
 from . import theme
@@ -29,6 +30,10 @@ _PEN_LIMIT = pg.mkPen(theme.DANGER, width=1, style=Qt.DashLine)
 _AXIS_COLOR = pg.mkColor(theme.TEXT3)
 
 _GHOST_MAX = 12
+_STAGE_VIEW_HEIGHT = 118
+_Z_PLOT_HEIGHT = 78
+_BOTTOM_AXIS_HEIGHT = 36
+_AXIS_TICK_TEXT_OFFSET = 8
 
 
 def _limit_line(angle: int, value: float = 0.0) -> pg.InfiniteLine:
@@ -42,7 +47,7 @@ class StageView(QWidget):
         super().__init__(parent)
         self.setObjectName("StageView")
         self.setStyleSheet(f"background:{theme.BG0};")
-        self.setFixedHeight(104)
+        self.setFixedHeight(_STAGE_VIEW_HEIGHT)
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -134,7 +139,7 @@ class StageView(QWidget):
         pw.showGrid(x=True, alpha=0.18)
         pw.setMouseEnabled(x=False, y=False)
         pw.setMenuEnabled(False)
-        pw.setFixedHeight(64)  # 14px marker + axis area needs ~50px+ to render cleanly
+        pw.setFixedHeight(_Z_PLOT_HEIGHT)
 
         vb = pw.getViewBox()
         # Y 锁死 (-1, 1) — marker 都在 y=0,不能被 autoRange 压扁;X 自动 View All 跟随数据
@@ -146,6 +151,13 @@ class StageView(QWidget):
         ax = pw.getAxis("bottom")
         ax.setPen(theme.BORDER1)
         ax.setTextPen(theme.TEXT3)
+        ax.setHeight(_BOTTOM_AXIS_HEIGHT)
+        ax.setTickFont(QFont(theme.SANS, theme.BASE_FONT_PT))
+        ax.setStyle(
+            tickTextOffset=_AXIS_TICK_TEXT_OFFSET,
+            autoExpandTextSpace=True,
+            autoReduceTextSpace=False,
+        )
         ax.setZValue(-100)
 
         return pw

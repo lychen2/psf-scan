@@ -87,6 +87,10 @@ class PIStage(StageBase):
         return (float(x), float(y), self._guard.to_ctrl_um(float(z)))
 
     def connect(self) -> None:
+        self._invoke_on_stage_thread("_connect_on_stage_thread")
+
+    @Slot()
+    def _connect_on_stage_thread(self) -> None:
         try: from pipython import GCSDevice
         except ImportError as exc:
             self.error.emit(f"未安装 pipython: {exc}"); return
@@ -130,6 +134,10 @@ class PIStage(StageBase):
             self.error.emit(f"PI 连接失败: {exc}")
 
     def disconnect(self) -> None:
+        self._invoke_on_stage_thread("_disconnect_on_stage_thread")
+
+    @Slot()
+    def _disconnect_on_stage_thread(self) -> None:
         self._timer.stop()
         pi_link.close_link(self._dev, self._dcid)
         self._dev = None; self._dcid = None; self._axis_id = None
@@ -171,6 +179,10 @@ class PIStage(StageBase):
 
     def stop(self) -> None:
         """急停: 立即停止所有轴 (PI STP 命令)。不破坏连接。也中断 FRF polling。"""
+        self._invoke_on_stage_thread("_stop_on_stage_thread")
+
+    @Slot()
+    def _stop_on_stage_thread(self) -> None:
         self._stop_requested = True
         if self._dev is None: return
         try: self._dev.STP(noraise=True)
@@ -178,6 +190,18 @@ class PIStage(StageBase):
         self._moving = False
 
     def set_velocity(self, v_um_per_s: float) -> None:
+        if QThread.currentThread() is not self.thread():
+            QMetaObject.invokeMethod(
+                self,
+                "_set_velocity_on_stage_thread",
+                Qt.ConnectionType.BlockingQueuedConnection,
+                Q_ARG(float, float(v_um_per_s)),
+            )
+            return
+        self._set_velocity_on_stage_thread(float(v_um_per_s))
+
+    @Slot(float)
+    def _set_velocity_on_stage_thread(self, v_um_per_s: float) -> None:
         v, clamped = self._guard.clamp_velocity(v_um_per_s)
         if clamped:
             self.error.emit(f"⚠ 速度被限到 {self._guard.velocity_max_um_s:.0f} µm/s")
@@ -189,12 +213,29 @@ class PIStage(StageBase):
 
     def set_zero(self) -> None:
         """把当前位置定义为用户视角的 0; 软限位跟随平移 (物理硬限位不变)。"""
+        self._invoke_on_stage_thread("_set_zero_on_stage_thread")
+
+    @Slot()
+    def _set_zero_on_stage_thread(self) -> None:
         if not self._connected:
             self.error.emit("未连接, 无法置零"); return
         lo, hi = self._zero_internal(None)
         self.error.emit(f"已置零 (ctrl={self._ctrl_pos_um:.1f} µm); 范围 [{lo:.0f}, {hi:.0f}] µm")
 
     def set_travel_limits_um(self, lo_user_um: float, hi_user_um: float) -> None:
+        if QThread.currentThread() is not self.thread():
+            QMetaObject.invokeMethod(
+                self,
+                "_set_travel_limits_on_stage_thread",
+                Qt.ConnectionType.BlockingQueuedConnection,
+                Q_ARG(float, float(lo_user_um)),
+                Q_ARG(float, float(hi_user_um)),
+            )
+            return
+        self._set_travel_limits_on_stage_thread(float(lo_user_um), float(hi_user_um))
+
+    @Slot(float, float)
+    def _set_travel_limits_on_stage_thread(self, lo_user_um: float, hi_user_um: float) -> None:
         """标定写入软限位。lo/hi 是用户视角, 内部换算到 ctrl 坐标系。"""
         lo, hi = sorted((float(lo_user_um), float(hi_user_um)))
         self._guard.tmin_um = self._guard.to_ctrl_um(lo)
@@ -202,6 +243,18 @@ class PIStage(StageBase):
         self.error.emit(f"软限位已更新: 用户视角 [{lo:.1f}, {hi:.1f}] µm")
 
     def set_invert_z(self, on: bool) -> None:
+        if QThread.currentThread() is not self.thread():
+            QMetaObject.invokeMethod(
+                self,
+                "_set_invert_z_on_stage_thread",
+                Qt.ConnectionType.BlockingQueuedConnection,
+                Q_ARG(bool, bool(on)),
+            )
+            return
+        self._set_invert_z_on_stage_thread(bool(on))
+
+    @Slot(bool)
+    def _set_invert_z_on_stage_thread(self, on: bool) -> None:
         """热切换 z 反转。stage 物理不动, user view 数字翻一边 + 软限位 sort 跟随。"""
         self._guard.invert_z = bool(on)
         if self._connected:
@@ -210,6 +263,18 @@ class PIStage(StageBase):
 
     def reset_range(self, radius_um: float) -> None:
         """以当前 ctrl 位置为 user 0, 行程重设为 ctrl ± radius。stage 物理不动。"""
+        if QThread.currentThread() is not self.thread():
+            QMetaObject.invokeMethod(
+                self,
+                "_reset_range_on_stage_thread",
+                Qt.ConnectionType.BlockingQueuedConnection,
+                Q_ARG(float, float(radius_um)),
+            )
+            return
+        self._reset_range_on_stage_thread(float(radius_um))
+
+    @Slot(float)
+    def _reset_range_on_stage_thread(self, radius_um: float) -> None:
         if not self._connected:
             self.error.emit("未连接, 无法 reset range"); return
         lo, hi = self._zero_internal(abs(float(radius_um)))
@@ -217,6 +282,18 @@ class PIStage(StageBase):
 
     def reference(self, refmode: str = "FRF") -> bool:
         """手动寻参 — 沿用 _do_reference 的限速 + polling, 可被 Esc/Space 中断。"""
+        if QThread.currentThread() is not self.thread():
+            QMetaObject.invokeMethod(
+                self,
+                "_reference_on_stage_thread",
+                Qt.ConnectionType.BlockingQueuedConnection,
+                Q_ARG(str, str(refmode)),
+            )
+            return self._was_referenced
+        return self._reference_on_stage_thread(str(refmode))
+
+    @Slot(str)
+    def _reference_on_stage_thread(self, refmode: str = "FRF") -> bool:
         if not self._connected or self._dev is None:
             self.error.emit("未连接, 无法寻参"); return False
         from types import SimpleNamespace
@@ -236,6 +313,16 @@ class PIStage(StageBase):
                 self.error.emit(f"寻参后读位置失败: {exc}")
         self._was_referenced = ok
         return ok
+
+    def _invoke_on_stage_thread(self, method_name: str) -> None:
+        if QThread.currentThread() is self.thread():
+            getattr(self, method_name)()
+            return
+        QMetaObject.invokeMethod(
+            self,
+            method_name,
+            Qt.ConnectionType.BlockingQueuedConnection,
+        )
 
     def _zero_internal(self, radius_um: Optional[float]) -> tuple[float, float]:
         """共享: STP + zero_offset 重设 + 可选重写行程; 返回 user_travel (lo, hi)。"""
@@ -287,15 +374,22 @@ class PIStage(StageBase):
         started = time.perf_counter()
         ok = False
         try:
-            self._ctrl_pos_um = float(self._dev.qPOS(self._axis_id)[self._axis_id]) * UM_PER_MM
-            self._pos_um[2] = self._guard.to_user_um(self._ctrl_pos_um)
+            ctrl_pos_um = float(self._dev.qPOS(self._axis_id)[self._axis_id]) * UM_PER_MM
+            pos_z_um = self._guard.to_user_um(ctrl_pos_um)
             was_moving = self._moving
-            try: ont = bool(self._dev.qONT(self._axis_id)[self._axis_id])
-            except Exception:  # noqa: BLE001
-                target_ctrl_um = self._guard.to_ctrl_um(self._target_z_um)
-                ont = abs(self._ctrl_pos_um - target_ctrl_um) < self._cfg.position_tolerance_um
+            if was_moving:
+                try: ont = bool(self._dev.qONT(self._axis_id)[self._axis_id])
+                except Exception:  # noqa: BLE001
+                    target_ctrl_um = self._guard.to_ctrl_um(self._target_z_um)
+                    ont = abs(ctrl_pos_um - target_ctrl_um) < self._cfg.position_tolerance_um
+            else:
+                ont = True
+            changed = abs(pos_z_um - self._pos_um[2]) >= self._cfg.position_tolerance_um
+            self._ctrl_pos_um = ctrl_pos_um
+            self._pos_um[2] = pos_z_um
             self._moving = not ont
-            self.position_changed.emit(*self._pos_um)
+            if changed or was_moving != self._moving:
+                self.position_changed.emit(*self._pos_um)
             if was_moving and not self._moving: self.move_finished.emit()
             ok = True
         except Exception as exc:  # noqa: BLE001

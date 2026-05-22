@@ -120,6 +120,11 @@ def set_frame_rate_value(cam, value: float) -> bool:
     return set_float(cam, "AcquisitionFrameRate", value)
 
 
+def resulting_frame_rate(cam) -> float | None:
+    state = get_float(cam, "ResultingFrameRate")
+    return None if state is None else state[0]
+
+
 def pixel_format_state(cam) -> tuple[str | None, list[str]]:
     """返回 (current_symbolic, [available_symbolic, ...])。"""
     cur = get_enum_symbolic(cam, "PixelFormat")

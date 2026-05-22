@@ -100,9 +100,31 @@ def button(
     control = QPushButton(text)
     if primary:
         control.setProperty("role", "primary")
+        control.setStyleSheet(_primary_button_qss())
     elif danger:
         control.setProperty("role", "danger")
     elif estop:
         control.setProperty("role", "estop")
     control.setEnabled(enabled)
+    control.style().unpolish(control)
+    control.style().polish(control)
     return control
+
+
+def _primary_button_qss() -> str:
+    return (
+        "QPushButton{"
+        f"background-color:{theme.ACCENT};"
+        f"color:{theme.ON_ACCENT};"
+        f"border:1px solid {theme.ACCENT_LO};"
+        f"font-family:'{theme.SANS}';"
+        f"font-size:{theme.SIZE_BODY};"
+        "font-weight:600;"
+        "letter-spacing:0.6px;"
+        "padding:5px 12px;"
+        "min-height:24px;"
+        "}"
+        f"QPushButton:hover{{background-color:{theme.ACCENT_HI};}}"
+        f"QPushButton:pressed{{background-color:{theme.ACCENT_LO};border-color:{theme.ACCENT_LO};}}"
+        f"QPushButton:disabled{{background:{theme.BG2};color:{theme.TEXT3};border-color:{theme.BORDER1};}}"
+    )

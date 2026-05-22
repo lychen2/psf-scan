@@ -116,6 +116,9 @@ class CameraView(QWidget):
         self._last_frame_t: float | None = None
         self._fps = 0.0
         self._fps_dirty = False
+        self._metrics_dirty = False
+        self._last_peak = 0
+        self._last_saturated_status = False
         self._fps_timer = QTimer(self)
         self._fps_timer.setInterval(100)
         self._fps_timer.timeout.connect(self._flush_fps)
@@ -148,7 +151,7 @@ class CameraView(QWidget):
 
     def _build_exposure_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setStyleSheet(f"background:{theme.BG0};border-bottom:1px solid {theme.BORDER0};")
+        bar.setStyleSheet(f"background:{theme.BG1};border-bottom:1px solid {theme.BORDER0};")
         h = QHBoxLayout(bar)
         h.setContentsMargins(8, 4, 8, 4)
         h.setSpacing(10)
@@ -209,11 +212,11 @@ class CameraView(QWidget):
         self.btn_line_profile.setToolTip(tr("tip.line_profile_tool"))
         self.btn_line_profile.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
-            f"background:{theme.BG0};padding:2px 10px;"
-            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
-            "font-weight:600;}"
-            f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
-            f"QToolButton:checked{{color:{theme.BG0};background:{theme.ACCENT};"
+            f"background:{theme.HIGHLIGHT};padding:4px 12px;"
+            f"font-family:'{theme.SANS}',sans-serif;font-size:{theme.SIZE_CONTROL};letter-spacing:1px;"
+            "font-weight:600;min-height:28px;}"
+            f"QToolButton:hover{{background:{theme.BG2};border-color:{theme.ACCENT};}}"
+            f"QToolButton:checked{{color:{theme.ON_ACCENT};background:{theme.ACCENT};"
             f"border-color:{theme.ACCENT};}}"
         )
         self.btn_line_profile.toggled.connect(self._on_line_profile_toggled)
@@ -226,12 +229,12 @@ class CameraView(QWidget):
         self.btn_advanced.setToolTip(tr("tip.advanced"))
         self.btn_advanced.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
-            f"background:{theme.BG0};padding:2px 10px;"
-            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
-            "font-weight:600;}"
-            f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
-            f"QToolButton:checked{{color:{theme.TEXT0};background:{theme.BG1};"
-            f"border-color:{theme.TEXT2};}}"
+            f"background:{theme.HIGHLIGHT};padding:4px 12px;"
+            f"font-family:'{theme.SANS}',sans-serif;font-size:{theme.SIZE_CONTROL};letter-spacing:1px;"
+            "font-weight:600;min-height:28px;}"
+            f"QToolButton:hover{{background:{theme.BG2};border-color:{theme.ACCENT};}}"
+            f"QToolButton:checked{{color:{theme.TEXT0};background:{theme.BG2};"
+            f"border-color:{theme.ACCENT};}}"
         )
         self.btn_advanced.toggled.connect(self._on_advanced_toggled)
         h.addWidget(self.btn_advanced)
@@ -241,7 +244,7 @@ class CameraView(QWidget):
 
     def _build_meter_bar(self) -> QWidget:
         bar = QWidget()
-        bar.setStyleSheet(f"background:{theme.BG0};border-top:1px solid {theme.BORDER0};")
+        bar.setStyleSheet(f"background:{theme.BG1};border-top:1px solid {theme.BORDER0};")
         h = QHBoxLayout(bar)
         h.setContentsMargins(8, 4, 8, 4)
         h.setSpacing(20)
@@ -288,6 +291,7 @@ class CameraView(QWidget):
         ts: float,
         saturated: bool | None = None,
         display_white_level: float | None = None,
+        peak: int | None = None,
     ) -> None:
         started = time.perf_counter()
         try:
@@ -295,6 +299,7 @@ class CameraView(QWidget):
                 frame,
                 saturated=saturated,
                 display_white_level=display_white_level,
+                peak=peak,
             )
         finally:
             self._record_display_time((time.perf_counter() - started) * 1000.0)
@@ -326,16 +331,19 @@ class CameraView(QWidget):
         self._display_max_ms = max(self._display_max_ms, elapsed_ms)
 
     def _flush_fps(self) -> None:
-        if not self._fps_dirty:
+        if not self._fps_dirty and not self._metrics_dirty:
             return
         self._fps_dirty = False
+        self._metrics_dirty = False
         self._fps_lbl.setText(tr("camera.fps_val", fps=self._fps))
+        self.metrics_changed.emit(self._last_peak, self._fps, self._last_saturated_status)
 
     def _update_frame(
         self,
         frame: np.ndarray,
         saturated: bool | None,
         display_white_level: float | None,
+        peak: int | None,
     ) -> None:
         self._image_stack.setCurrentWidget(self._iv)
         self._last_raw_frame = frame
@@ -345,11 +353,13 @@ class CameraView(QWidget):
 
         if not self._levels_set:
             self._levels_set = True
-        peak = int(frame.max())
+        peak = int(frame.max()) if peak is None else int(peak)
         self._update_frame_metrics(frame, peak)
         sat = saturated if saturated is not None else is_sensor_saturated(frame, self._max_val)
         self._update_saturation_badge(sat)
-        self.metrics_changed.emit(peak, self._fps, sat)
+        self._last_peak = peak
+        self._last_saturated_status = bool(sat)
+        self._metrics_dirty = True
         if self._line_roi is not None:
             self._refresh_line_profile()
 
@@ -372,9 +382,9 @@ class CameraView(QWidget):
     def _show_frame(self, frame: np.ndarray, display_white_level: float | None) -> None:
         levels = (0, self._display_white_level(display_white_level))
         if self._levels_set:
-            self._iv.setImage(
-                frame.T, autoLevels=False, autoRange=False,
-                levels=levels, autoHistogramRange=False,
+            self._iv.imageItem.setImage(
+                frame.T, autoLevels=False,
+                levels=levels,
             )
             return
         self._iv.setImage(
@@ -536,12 +546,12 @@ class CameraView(QWidget):
         btn.setText(label)
         btn.setStyleSheet(
             f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
-            f"background:{theme.BG0};padding:2px 10px;"
-            f"font-family:'Inter',sans-serif;font-size:{theme.SIZE_METER};letter-spacing:1px;"
-            "font-weight:600;}"
-            f"QToolButton:hover{{background:{theme.BG1};border-color:{theme.TEXT2};}}"
+            f"background:{theme.HIGHLIGHT};padding:4px 12px;"
+            f"font-family:'{theme.SANS}',sans-serif;font-size:{theme.SIZE_CONTROL};letter-spacing:1px;"
+            "font-weight:600;min-height:28px;}"
+            f"QToolButton:hover{{background:{theme.BG2};border-color:{theme.ACCENT};}}"
             f"QToolButton:disabled{{color:{theme.TEXT3};border-color:{theme.BORDER0};}}"
-            f"QToolButton:checked{{color:{theme.BG0};background:{theme.DANGER};"
+            f"QToolButton:checked{{color:{theme.ON_ACCENT};background:{theme.DANGER};"
             f"border-color:{theme.DANGER};}}"
         )
         return btn
@@ -622,6 +632,9 @@ class CameraView(QWidget):
         self._last_frame_t = None
         self._fps = 0.0
         self._fps_dirty = False
+        self._metrics_dirty = False
+        self._last_peak = 0
+        self._last_saturated_status = False
         self._sharpness_window.clear()
         self._last_raw_frame = None
         self.sp_exp.setEnabled(False)

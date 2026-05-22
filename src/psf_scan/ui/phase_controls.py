@@ -33,8 +33,10 @@ class PhaseControls(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("PhaseControls")
         self.setStyleSheet(
-            f"QWidget{{background:{theme.BG0};border-top:1px solid {theme.BORDER0};}}"
+            f"QWidget#PhaseControls{{background:{theme.BG0};"
+            f"border-top:1px solid {theme.BORDER0};}}"
         )
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 8, 12, 8)

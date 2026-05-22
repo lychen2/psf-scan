@@ -77,9 +77,10 @@ QFrame[role="vrule"] {{
     border: none;
 }}
 QLabel[role="hint"] {{
-    color: {TEXT3};
+    color: {TEXT2};
     font-size: {SIZE_BODY};
-    font-family: "{MONO}";
+    font-family: "{SANS}";
+    font-weight: 500;
 }}
 QLabel[role="value"] {{
     color: {TEXT0};
@@ -345,18 +346,19 @@ QMessageBox QLabel, QInputDialog QLabel {{
 }}
 
 QPushButton {{
-    background-color: transparent;
+    background-color: {HIGHLIGHT};
     color: {TEXT1};
     border: 1px solid {BORDER1};
-    padding: 6px 14px;
+    padding: 5px 12px;
     font-family: "{SANS}";
-    font-size: {SIZE_BODY};
-    letter-spacing: 0.5px;
-    min-height: 22px;
+    font-size: {SIZE_CONTROL};
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    min-height: 26px;
 }}
 QPushButton:hover {{ 
     background-color: {BG2};
-    border-color: {TEXT3};
+    border-color: {ACCENT};
 }}
 QPushButton:focus {{
     border: 1px solid {ACCENT};
@@ -372,10 +374,10 @@ QPushButton:disabled {{
 }}
 QPushButton[role="primary"] {{
     background-color: {ACCENT};
-    color: {TEXT0};
+    color: {ON_ACCENT};
     border: 1px solid {ACCENT_LO};
     font-weight: 600;
-    letter-spacing: 1px;
+    letter-spacing: 0.6px;
 }}
 QPushButton[role="primary"]:hover {{ 
     background-color: {ACCENT_HI};
@@ -479,7 +481,7 @@ QToolTip {{
 }}
 
 QLabel[role="sat-badge"] {{
-    color: {TEXT0};
+    color: {ON_ACCENT};
     background: {WARN};
     border: 1px solid {WARN};
     padding: 2px 8px;
@@ -510,30 +512,35 @@ QLabel[role="status-progress"] {{
     letter-spacing: 1px;
 }}
 QToolButton {{
-    background-color: transparent;
+    background-color: {HIGHLIGHT};
     color: {TEXT1};
     border: 1px solid {BORDER1};
     padding: 4px;
     border-radius: 0;
+    font-family: "{SANS}";
+    font-size: {SIZE_CONTROL};
+    min-width: 28px;
+    min-height: 28px;
 }}
 QToolButton:hover {{ 
     background-color: {BG2};
-    border-color: {TEXT3}; 
+    border-color: {ACCENT}; 
 }}
 QToolButton:focus {{
     border: 1px solid {ACCENT};
 }}
 QToolButton:pressed, QToolButton:checked {{ 
-    background-color: {BG0};
-    border: 1px solid {BORDER1};
+    background-color: {ACCENT};
+    color: {ON_ACCENT};
+    border: 1px solid {ACCENT_LO};
 }}
 QToolButton[role="iconbtn"] {{
     color: {TEXT2};
     background: transparent;
     border: none;
-    padding: 0 6px;
+    padding: 0 8px;
     font-family: "{SANS}";
-    font-size: {SIZE_BODY};
+    font-size: {SIZE_CONTROL};
     letter-spacing: 1px;
     font-weight: 600;
 }}
@@ -543,9 +550,11 @@ QToolButton[role="settings"] {{
     color: {TEXT2};
     background: transparent;
     border: none;
-    padding: 0 6px;
+    padding: 0 8px;
     font-family: "{SANS}";
-    font-size: 16px;
+    font-size: 20px;
+    min-width: 32px;
+    min-height: 28px;
 }}
 QToolButton[role="settings"]:hover {{ color: {TEXT0}; }}
 QToolButton[role="settings"]:focus {{ color: {TEXT0}; }}
@@ -557,7 +566,7 @@ QFrame[role="group-rule"] {{
 }}
 QPushButton[role="connect"] {{
     background-color: {ACCENT};
-    color: {TEXT0};
+    color: {ON_ACCENT};
     border: 1px solid {ACCENT_LO};
     font-weight: 600;
     letter-spacing: 1px;

@@ -64,6 +64,8 @@ def _pump(app: QApplication, seconds: float) -> None:
 def main() -> None:  # noqa: C901
     _silence_dialogs()
     app = QApplication.instance() or QApplication(sys.argv)
+    from psf_scan.ui.theme import apply_theme
+    apply_theme(app, scale=1.0, mode="dark")
     from psf_scan.app import MainWindow
 
     win = MainWindow()

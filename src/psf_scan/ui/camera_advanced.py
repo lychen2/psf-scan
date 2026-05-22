@@ -33,7 +33,7 @@ class CameraAdvancedBar(QWidget):
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setStyleSheet(
-            f"background:{theme.BG0};border-bottom:1px solid {theme.BORDER0};"
+            f"background:{theme.BG1};border-bottom:1px solid {theme.BORDER0};"
         )
 
         outer = QVBoxLayout(self)

@@ -18,6 +18,7 @@ class PhaseDisplay(pg.GraphicsLayoutWidget):
         super().__init__(parent)
         self.setBackground(theme.CANVAS_BG)
         self._plot = self.addPlot(row=0, col=0)
+        self._style_plot()
         self._item = pg.ImageItem(axisOrder="col-major")
         self._plot.addItem(self._item)
         self._plot.setAspectLocked(True)
@@ -28,7 +29,7 @@ class PhaseDisplay(pg.GraphicsLayoutWidget):
 
     def clear_display(self, text: str = "") -> None:
         self._item.clear()
-        self._plot.setTitle(text, color=theme.TEXT0, size="10pt")
+        self._plot.setTitle(text, color=theme.CANVAS_FG, size="10pt")
         self._clear_sideband()
 
     def set_image(
@@ -46,9 +47,16 @@ class PhaseDisplay(pg.GraphicsLayoutWidget):
             self._item.setLevels(levels)
         self._item.setLookupTable(resolve_or_default(cmap_name).getLookupTable())
         self._item.setRect(0, 0, data.shape[1], data.shape[0])
-        self._plot.setTitle(title, color=theme.TEXT0, size="10pt")
+        self._plot.setTitle(title, color=theme.CANVAS_FG, size="10pt")
         self._draw_sideband(sideband)
         self._plot.setRange(xRange=[0, data.shape[1]], yRange=[0, data.shape[0]], padding=0.0)
+
+    def _style_plot(self) -> None:
+        self._plot.getViewBox().setBackgroundColor(theme.CANVAS_BG)
+        for axis_name in ("left", "bottom"):
+            axis = self._plot.getAxis(axis_name)
+            axis.setPen(pg.mkPen(theme.CANVAS_BORDER))
+            axis.setTextPen(pg.mkPen(theme.CANVAS_FG))
 
     def _draw_sideband(self, sideband: Sideband | None) -> None:
         self._clear_sideband()

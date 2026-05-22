@@ -41,13 +41,24 @@ installer/vendored/
 # --- 个人 / 客户联系方式（绝不入库；从 example 复制后本地填值）---
 installer/support_contact.json
 
-# --- 本地用户手册（含联系人信息，不入库；分发时按需打包）---
+# --- 本地文档 / 论文 / 散落素材（本地工作用，不入库）---
+# 各种 PDF（用户手册、quickstart 编译产物、参考论文等）一律不入库
+*.pdf
+*.bmp
+
+# 用户手册源（含联系人信息，仅本地分发）
 docs/manual.tex
-docs/manual.pdf
-docs/manual.aux
-docs/manual.log
-docs/manual.out
-docs/manual.toc
+
+# docs/ 下的 LaTeX 构建中间产物
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.toc
+docs/*.synctex.gz
+
+# 中文 “复制 N” 副本与临时笔记目录
+docs/*复制*
+docs/通了*
 
 # --- 打包构建产物 ---
 /build/

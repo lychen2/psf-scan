@@ -338,7 +338,7 @@ def _progress_qss(finished: bool) -> str:
     chunk = theme.DONE if finished else theme.ACCENT
     return (
         f"QProgressBar{{background:{theme.BG0};border:1px solid {theme.BORDER0};"
-        "border-radius:0;}}"
+        "border-radius:0;}"
         f"QProgressBar::chunk{{background:{chunk};}}"
     )
 

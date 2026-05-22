@@ -1,11 +1,10 @@
-"""主题 — 浅色 / 深色双调色板,应用入口。
+"""主题 — 浅色 / MVS 深色双调色板,应用入口。
 
 QSS 模板见 ``_qss.py``。
-- 浅色 (light): 默认,符合 PRODUCT.md 的"暖中性浅画布"原则。
-- 深色 (dark): 暖深底 UI chrome (面板 / 按钮 / 文本),给夜间或长时间观看用。
-  PSF / stage 等后续绘图画布区保持浅色,colormap 由 viridis 等表达;
-  相机预览画布跟随主题,便于暗场观察。
-  深色只切 chrome,不污染数据可读性。
+- 深色 (dark): 默认 MVS-style graphite chrome,用于工业相机采集控制。
+  相机预览画布跟随深色 chrome,贴近 MVS live view。
+- 浅色 (light): 保留给强环境光或偏好浅色 UI 的用户。
+  PSF / stage 等分析画布区始终保持浅色,colormap 由 viridis 等表达。
 """
 
 from __future__ import annotations
@@ -56,29 +55,29 @@ _LIGHT = {
     "HIGHLIGHT": "#fefdf7",
 }
 
-# ── Dark palette (warm-tinted, 不冷蓝灰也不纯黑) ──────────
-# 设计原则:基础 hue 同 light 保持暖偏(~75 度),把 lightness 推到 0.18-0.32 区间;
-# accent / danger / warn 在深底上略提亮以保持对比;bevel 反过来用深 shadow + 暖深 highlight。
+# ── Dark palette (MVS-style graphite acquisition console) ──────────
+# 设计原则:深石墨 chrome + 橙色当前动作。黑色只服务于采集窗口/控件外壳;
+# PSF / stage 分析画布仍由 CANVAS_* 锁定为浅底。
 _DARK = {
-    "BG0": "#1a1714",   # paper (inputs, tooltip, status bar bg)
-    "BG1": "#241f1a",   # panel (main window, control panel)
-    "BG2": "#2e2823",   # surface (hover, disabled)
-    "BORDER0": "#3a3329",
-    "BORDER1": "#4e463a",
-    "TEXT0": "#ede8df",   # strong
-    "TEXT1": "#d4cec3",
-    "TEXT2": "#9c9789",
-    "TEXT3": "#82806f",
-    "ACCENT": "#9fc6dc",   # signal blue: 同 hue, 深底上仍醒目
-    "ACCENT_HI": "#b8d7e8",
-    "ACCENT_LO": "#7aa9c5",
-    "DONE": "#7eb0a3",     # sampled green: 略提亮
-    "DANGER": "#d6766c",   # terracotta: 提亮版
-    "DANGER_HI": "#e08879",
-    "DANGER_LO": "#b85a51",
-    "WARN": "#e3a14b",
-    "SHADOW": "#13110e",   # 更深 shadow
-    "HIGHLIGHT": "#332d27",  # 暖深 highlight
+    "BG0": "#121417",       # acquisition viewport / inputs / status base
+    "BG1": "#1a1d21",       # menu bar / top bars
+    "BG2": "#23272d",       # docked panels / disabled base
+    "BORDER0": "#3f454d",
+    "BORDER1": "#59616b",
+    "TEXT0": "#f1eee7",
+    "TEXT1": "#d9d4ca",
+    "TEXT2": "#c1beb5",
+    "TEXT3": "#9ca2aa",
+    "ACCENT": "#f08a24",    # MVS orange: current command / selection
+    "ACCENT_HI": "#ffad45",
+    "ACCENT_LO": "#bf661b",
+    "DONE": "#72a99b",
+    "DANGER": "#d76f63",
+    "DANGER_HI": "#e58a7c",
+    "DANGER_LO": "#a94c43",
+    "WARN": "#e4b04f",
+    "SHADOW": "#0b0d0f",
+    "HIGHLIGHT": "#2d3238",
 }
 
 # ── Canvas-locked tokens (永远浅色, 不随 mode 切) ──────────
@@ -111,6 +110,7 @@ DANGER_LO = _LIGHT["DANGER_LO"]
 WARN = _LIGHT["WARN"]
 SHADOW = _LIGHT["SHADOW"]
 HIGHLIGHT = _LIGHT["HIGHLIGHT"]
+ON_ACCENT = "#121417"
 MODE = "light"
 
 
@@ -164,7 +164,7 @@ def _apply_palette(mode: str) -> None:
     global TEXT0, TEXT1, TEXT2, TEXT3
     global ACCENT, ACCENT_HI, ACCENT_LO, DONE
     global DANGER, DANGER_HI, DANGER_LO, WARN
-    global SHADOW, HIGHLIGHT, MODE
+    global SHADOW, HIGHLIGHT, ON_ACCENT, MODE
     palette = _DARK if mode == "dark" else _LIGHT
     MODE = "dark" if mode == "dark" else "light"
     BG0 = palette["BG0"]
@@ -186,6 +186,7 @@ def _apply_palette(mode: str) -> None:
     WARN = palette["WARN"]
     SHADOW = palette["SHADOW"]
     HIGHLIGHT = palette["HIGHLIGHT"]
+    ON_ACCENT = "#121417"
 
 
 def apply_theme(app: QApplication, scale: float = 1.0, mode: str = "light") -> None:
@@ -247,6 +248,7 @@ def apply_theme(app: QApplication, scale: float = 1.0, mode: str = "light") -> N
         DONE=DONE, DANGER=DANGER,
         DANGER_HI=DANGER_HI, DANGER_LO=DANGER_LO,
         WARN=WARN,
+        ON_ACCENT=ON_ACCENT,
         SANS=SANS, MONO=MONO,
         SIZE_SECTION=SIZE_SECTION,
         SIZE_VALUE=SIZE_VALUE,

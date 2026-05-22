@@ -139,8 +139,8 @@ class UserSettings:
         self.set_value("ui/scale_factor", float(v))
 
     def ui_theme(self) -> str:
-        """UI 主题:'light' (默认) 或 'dark'。改了要重启才生效。"""
-        raw = str(self._settings.value("ui/theme", "light") or "light").lower()
+        """UI 主题:'dark' (MVS 默认) 或 'light'。改了要重启才生效。"""
+        raw = str(self._settings.value("ui/theme", "dark") or "dark").lower()
         return "dark" if raw == "dark" else "light"
 
     def set_ui_theme(self, mode: str) -> None:

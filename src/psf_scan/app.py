@@ -23,7 +23,7 @@ from .core.calibration import (
     apply_calibration,
     calibrated_white_level,
     config_from_settings,
-    is_sensor_saturated,
+    SENSOR_SATURATION_FRACTION,
     validate_config,
 )
 from .core.data_io import (
@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         self._scanner: Optional[Scanner] = None
         self._scan_thread: Optional[QThread] = None
         self._save_thread: Optional[QThread] = None
+        self._stage_thread: Optional[QThread] = None
         self._save_worker: Optional[_SaveWorker] = None
         self._af_thread: Optional[QThread] = None
         self._af_worker: Optional[AutofocusWorker] = None
@@ -342,6 +343,7 @@ class MainWindow(QMainWindow):
             _log.exception("make_stage/make_camera failed (stage=%s camera=%s)", stage_kind, cam_kind)
             QMessageBox.critical(self, "连接失败", str(exc))
             return
+        self._start_stage_thread(stage_kind, stage)
 
         stage.position_changed.connect(self.stage_view.set_position)
         stage.position_changed.connect(self._on_position)
@@ -356,6 +358,11 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             _log.exception("stage.connect failed")
             QMessageBox.critical(self, "启动失败", f"位移台连接失败:\n{exc}")
+            self._stop_stage_thread()
+            return
+        if not stage.is_connected:
+            QMessageBox.critical(self, "启动失败", "位移台连接失败。")
+            self._stop_stage_thread()
             return
         try:
             camera.connect()
@@ -366,6 +373,7 @@ class MainWindow(QMainWindow):
                 stage.disconnect()
             except Exception:  # noqa: BLE001
                 pass
+            self._stop_stage_thread()
             return
         try:
             self._restore_camera_settings(camera)
@@ -398,6 +406,7 @@ class MainWindow(QMainWindow):
                 stage.disconnect()
             except Exception:  # noqa: BLE001
                 pass
+            self._stop_stage_thread()
             return
 
         # jog panel 同步当前 stage 限位/速度/步长
@@ -431,11 +440,34 @@ class MainWindow(QMainWindow):
         self.status_strip.set_message(device_text)
         self.statusBar().showMessage(f"connected · {device_text}", 5000)
 
+    def _start_stage_thread(self, stage_kind: str, stage: StageBase) -> None:
+        if stage_kind.lower() not in {"pi-m531", "pi", "m531"}:
+            return
+        self._stop_stage_thread()
+        thread = QThread(self)
+        thread.setObjectName("PIStageIO")
+        stage.moveToThread(thread)
+        thread.start()
+        self._stage_thread = thread
+
+    def _stop_stage_thread(self) -> None:
+        thread = self._stage_thread
+        if thread is None:
+            return
+        thread.quit()
+        if not thread.wait(2000):
+            _log.warning("PI stage IO thread did not stop within 2s")
+        self._stage_thread = None
+
     def _restore_camera_settings(self, camera: CameraBase) -> None:
         exposure_us = self._settings.value_int("camera/exposure_us", camera.get_exposure_us())
         gain = self._settings.value_float("camera/gain", camera.get_gain())
         camera.set_exposure_us(exposure_us)
         camera.set_gain(gain)
+        current_fps = camera.get_frame_rate()
+        if current_fps is not None:
+            fps = self._settings.value_float("camera/frame_rate_fps", current_fps)
+            camera.set_frame_rate(fps)
 
     def _wire_preview_backpressure(self, camera: CameraBase) -> None:
         done = getattr(camera, "mark_preview_delivered", None)
@@ -453,12 +485,14 @@ class MainWindow(QMainWindow):
 
     @Slot(object, float)
     def _on_camera_frame(self, frame, ts: float) -> None:
+        raw_peak = int(frame.max())
         shown = self._apply_calibration_for_preview(frame)
         self.cam_view.update_frame(
             shown,
             ts,
-            saturated=self._is_sensor_saturated(frame),
+            saturated=self._is_peak_saturated(raw_peak),
             display_white_level=self._preview_white_level(),
+            peak=raw_peak if shown is frame else None,
         )
 
     def _apply_calibration_for_preview(self, frame):
@@ -481,8 +515,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"calibration · {exc}", 6000)
             return frame
 
-    def _is_sensor_saturated(self, frame) -> bool:
-        return is_sensor_saturated(frame, self.cam_view.max_value())
+    def _is_peak_saturated(self, peak: int) -> bool:
+        return float(peak) >= float(self.cam_view.max_value()) * SENSOR_SATURATION_FRACTION
 
     def _preview_white_level(self) -> float:
         return calibrated_white_level(
@@ -564,8 +598,10 @@ class MainWindow(QMainWindow):
 
     @Slot(float)
     def _on_frame_rate_changed(self, fps: float) -> None:
-        if self._camera:
-            self._camera.set_frame_rate(fps)
+        if not self._camera:
+            return
+        self._camera.set_frame_rate(fps)
+        self._settings.set_value("camera/frame_rate_fps", fps)
 
     @Slot(str)
     def _on_pixel_format_changed(self, fmt: str) -> None:
@@ -585,7 +621,12 @@ class MainWindow(QMainWindow):
             self._camera.disconnect()
             self._camera = None
         self._calibration_config = None
-        if self._stage: self._stage.disconnect(); self._stage = None
+        if self._stage:
+            try:
+                self._stage.disconnect()
+            finally:
+                self._stage = None
+                self._stop_stage_thread()
         self.stage_jog.set_enabled(False)
         self.control.set_connected(False)
         self.cam_view.reset(); self.stage_view.clear_path()
