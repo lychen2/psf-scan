@@ -124,12 +124,13 @@ class VolumeSurface(QWidget):
         options: RenderOptions,
         z_positions: np.ndarray | None,
         live: bool = False,
+        data_revision: int | None = None,
     ) -> None:
         if options.mode != MODE_VOLUME:
             raise ValueError(f"volume surface 收到非 volume 模式: {options.mode}")
         prev_shape = None if self._full_volume is None else self._full_volume.shape
         self._full_volume = volume
-        self._mip_overlay.set_volume(volume)
+        self._mip_overlay.set_volume(volume, revision=data_revision)
         if self._roi is None or prev_shape != volume.shape:
             self._roi = self._initial_roi(volume.shape)
             self._mip_overlay.set_roi(self._roi)

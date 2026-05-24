@@ -35,6 +35,7 @@ class PSFView(QWidget):
         self._live = False
         self._render_pending = False
         self._running_levels: tuple[float, float] | None = None
+        self._volume_revision = 0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -72,6 +73,7 @@ class PSFView(QWidget):
         self._volume = None
         self._render_pending = False
         self._running_levels = None
+        self._bump_volume_revision()
         self._live_refresh.stop()
         self._plot.clear()
         self._set_empty(tr("scan.scanning_status"))
@@ -82,6 +84,7 @@ class PSFView(QWidget):
         self._ensure_stack(frame)
         self._stack[idx] = frame
         self._frame_count += 1
+        self._bump_volume_revision()
         # 用单帧的 min/max 增量更新整套 levels，避免对增长中的 stack 做全量扫。
         f_lo = float(np.nanmin(frame))
         f_hi = float(np.nanmax(frame))
@@ -97,6 +100,7 @@ class PSFView(QWidget):
         self._frame_count = len(self._stack)
         self._positions = np.array(positions, copy=True)
         self._path_positions = np.array(positions, copy=True)
+        self._bump_volume_revision()
         # 扫描结束态: 一次性算出准确 levels,后续 _render 直接用 hint 不再扫体。
         self._running_levels = (
             float(np.nanmin(self._stack)),
@@ -168,6 +172,7 @@ class PSFView(QWidget):
                 options=options,
                 z_positions=self._z_positions(),
                 live=self._live,
+                data_revision=self._volume_revision,
             )
             return
         images = render_images(self._volume, options, self._z_positions())
@@ -198,6 +203,9 @@ class PSFView(QWidget):
 
     def _on_auto_toggled(self, on: bool) -> None:
         self._refresh_render()
+
+    def _bump_volume_revision(self) -> None:
+        self._volume_revision += 1
 
     def _set_empty(self, text: str) -> None:
         self._controls.set_empty(text)

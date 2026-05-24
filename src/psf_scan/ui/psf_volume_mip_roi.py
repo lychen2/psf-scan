@@ -58,6 +58,8 @@ class MipRoiOverlay(QWidget):
         self._suppress_emit = False
         self._rect_zoom_on = False
         self._rendered_hint: Optional[QGraphicsRectItem] = None
+        self._mip_cache_key: tuple[int, tuple[int, int, int], str] | None = None
+        self._mip_cache: np.ndarray | None = None
         self.setToolTip("")
 
         layout = QVBoxLayout(self)
@@ -67,11 +69,11 @@ class MipRoiOverlay(QWidget):
     def sizeHint(self) -> QSize:  # noqa: D401
         return QSize(THUMB_W, THUMB_H)
 
-    def set_volume(self, volume: np.ndarray) -> None:
+    def set_volume(self, volume: np.ndarray, *, revision: int | None = None) -> None:
         """传入完整体数据；自动计算 Z-MIP 显示，首次会放置覆盖整个图的 ROI。"""
         if volume.ndim != 3:
             return
-        mip = volume.max(axis=0)
+        mip = self._mip_for_volume(volume, revision)
         self._image.setImage(mip, autoLevels=True)
         z, h, w = volume.shape
         prev_shape = self._volume_shape
@@ -180,6 +182,19 @@ class MipRoiOverlay(QWidget):
         self._plot.addItem(roi)
         self._roi = roi
 
+    def _mip_for_volume(self, volume: np.ndarray, revision: int | None) -> np.ndarray:
+        if revision is None:
+            self._mip_cache_key = None
+            self._mip_cache = None
+            return volume.max(axis=0)
+        key = (int(revision), _shape3(volume), str(volume.dtype))
+        if key != self._mip_cache_key:
+            self._mip_cache = volume.max(axis=0)
+            self._mip_cache_key = key
+        if self._mip_cache is None:
+            raise RuntimeError("MIP cache missing after refresh")
+        return self._mip_cache
+
     def _on_roi_changed(self) -> None:
         if self._suppress_emit:
             return
@@ -187,3 +202,8 @@ class MipRoiOverlay(QWidget):
         if roi is None:
             return
         self.roi_changed.emit(*roi)
+
+
+def _shape3(volume: np.ndarray) -> tuple[int, int, int]:
+    z, h, w = volume.shape
+    return int(z), int(h), int(w)

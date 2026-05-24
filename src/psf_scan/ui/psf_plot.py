@@ -65,6 +65,7 @@ class PsfPlotWidget(QWidget):
         options: RenderOptions,
         z_positions: np.ndarray | None,
         live: bool = False,
+        data_revision: int | None = None,
     ) -> None:
         volume_surface = self._ensure_volume_surface()
         self._stack.setCurrentWidget(volume_surface)
@@ -74,6 +75,7 @@ class PsfPlotWidget(QWidget):
             options=options,
             z_positions=z_positions,
             live=live,
+            data_revision=data_revision,
         )
 
     def export_to(self, path: str) -> None:

@@ -67,9 +67,7 @@ class CameraAdvancedBar(QWidget):
         row2.addWidget(HintLabel("fps"))
         self.sp_fps = _dspin(1.0, 240.0, 30.0, 1.0, 1, width=68)
         self.sp_fps.setToolTip(tr("tip.frame_rate"))
-        self.sp_fps.editingFinished.connect(
-            lambda: self.frame_rate_changed.emit(self.sp_fps.value())
-        )
+        self.sp_fps.valueChanged.connect(self.frame_rate_changed.emit)
         row2.addWidget(self.sp_fps)
         row2.addSpacing(theme.G_16)
         row2.addWidget(HintLabel("pixel"))
