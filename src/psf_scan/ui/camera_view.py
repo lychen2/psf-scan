@@ -49,6 +49,8 @@ def _empty_html(main_key: str, hint_key: str) -> str:
 
 class CameraView(QWidget):
     exposure_changed = Signal(int)        # us
+    auto_exposure_requested = Signal()
+    hardware_dark_requested = Signal()
     gain_changed = Signal(float)
     colormap_changed = Signal(str)
     gamma_changed = Signal(float)
@@ -123,6 +125,9 @@ class CameraView(QWidget):
         self._fps_timer.setInterval(100)
         self._fps_timer.timeout.connect(self._flush_fps)
         self._fps_timer.start()
+        self._auto_levels = False
+        self._auto_level_levels: tuple[float, float] | None = None
+        self._auto_level_last_ts = 0.0
         self._levels_set = False
         self._max_val = 255
         self._saturated = False
@@ -192,7 +197,25 @@ class CameraView(QWidget):
         self.cb_cmap.currentTextChanged.connect(self._on_cmap_changed)
         h.addWidget(self.cb_cmap)
 
+        self.btn_auto_exposure = self._tool_button(tr("camera.auto_exposure"))
+        self.btn_auto_exposure.setEnabled(False)
+        self.btn_auto_exposure.setToolTip(tr("tip.auto_exposure"))
+        self.btn_auto_exposure.clicked.connect(self.auto_exposure_requested.emit)
+        h.addWidget(self.btn_auto_exposure)
+
+        self.btn_auto_levels = self._tool_button(tr("camera.auto_levels"), checkable=True)
+        self.btn_auto_levels.setToolTip(tr("tip.auto_levels"))
+        self.btn_auto_levels.toggled.connect(self._on_auto_levels_toggled)
+        h.addWidget(self.btn_auto_levels)
+
+        self.btn_hardware_dark = self._tool_button(tr("camera.hardware_dark"))
+        self.btn_hardware_dark.setEnabled(False)
+        self.btn_hardware_dark.setToolTip(tr("tip.hardware_dark"))
+        self.btn_hardware_dark.clicked.connect(self.hardware_dark_requested.emit)
+        h.addWidget(self.btn_hardware_dark)
+
         h.addWidget(_vrule())
+
         self.btn_snapshot = self._action_button(tr("camera.snapshot"))
         self.btn_snapshot.setEnabled(False)
         self.btn_snapshot.setToolTip(tr("tip.snapshot"))
@@ -275,6 +298,8 @@ class CameraView(QWidget):
         self.sp_exp.setRange(int(exp_range[0]), int(exp_range[1]))
         self.sp_exp.setValue(int(exposure_us))
         self.sp_exp.setEnabled(True)
+        self.btn_auto_exposure.setEnabled(True)
+        self.btn_hardware_dark.setEnabled(True)
         self.sp_exp.blockSignals(False)
         self.sp_gain.blockSignals(True)
         self.sp_gain.setRange(float(gain_range[0]), float(gain_range[1]))
@@ -380,7 +405,10 @@ class CameraView(QWidget):
         self._fps_dirty = True
 
     def _show_frame(self, frame: np.ndarray, display_white_level: float | None) -> None:
-        levels = (0, self._display_white_level(display_white_level))
+        if self._auto_levels:
+            levels = self._auto_display_levels(frame)
+        else:
+            levels = (0, self._display_white_level(display_white_level))
         if self._levels_set:
             self._iv.imageItem.setImage(
                 frame.T, autoLevels=False,
@@ -391,6 +419,19 @@ class CameraView(QWidget):
             frame.T, autoLevels=False,
             levels=levels, autoHistogramRange=False,
         )
+
+    def _auto_display_levels(self, frame: np.ndarray) -> tuple[float, float]:
+        now = time.perf_counter()
+        if self._auto_level_levels is not None and now - self._auto_level_last_ts < 0.25:
+            return self._auto_level_levels
+        lo, hi = np.percentile(frame, (0.1, 99.9))
+        lo = float(lo)
+        hi = float(hi)
+        if hi <= lo:
+            hi = lo + 1.0
+        self._auto_level_levels = (lo, hi)
+        self._auto_level_last_ts = now
+        return self._auto_level_levels
 
     def _update_frame_metrics(self, frame: np.ndarray, peak: int) -> None:
         h, w = frame.shape[:2]
@@ -439,6 +480,21 @@ class CameraView(QWidget):
     def _on_cmap_changed(self, name: str) -> None:
         self._apply_colormap(name)
         self.colormap_changed.emit(self._cmap_name)
+
+    def _on_auto_levels_toggled(self, on: bool) -> None:
+        self._auto_levels = on
+        self._auto_level_levels = None
+        self._auto_level_last_ts = 0.0
+        if self._settings is not None:
+            self._settings.set_value("camera/auto_levels", on)
+        if self._last_raw_frame is not None:
+            self._levels_set = True
+            self._show_frame(self._last_raw_frame, None)
+
+    def set_exposure_value(self, exposure_us: int) -> None:
+        self.sp_exp.blockSignals(True)
+        self.sp_exp.setValue(int(exposure_us))
+        self.sp_exp.blockSignals(False)
 
     def set_colormap(self, name: str) -> None:
         """外部按名字设 colormap（同步 UI 与图像）；未知名字静默忽略。"""
@@ -541,6 +597,22 @@ class CameraView(QWidget):
         b.move(self._image_host.width() - b.width() - 12, 12)
         b.raise_()
 
+    def _tool_button(self, label: str, *, checkable: bool = False) -> QToolButton:
+        btn = QToolButton()
+        btn.setText(label)
+        btn.setCheckable(checkable)
+        btn.setStyleSheet(
+            f"QToolButton{{color:{theme.TEXT1};border:1px solid {theme.BORDER0};"
+            f"background:{theme.HIGHLIGHT};padding:4px 8px;"
+            f"font-family:'{theme.SANS}',sans-serif;font-size:{theme.SIZE_CONTROL};letter-spacing:1px;"
+            "font-weight:600;min-height:28px;}"
+            f"QToolButton:hover{{background:{theme.BG2};border-color:{theme.ACCENT};}}"
+            f"QToolButton:disabled{{color:{theme.TEXT3};border-color:{theme.BORDER0};}}"
+            f"QToolButton:checked{{color:{theme.ON_ACCENT};background:{theme.ACCENT};"
+            f"border-color:{theme.ACCENT};}}"
+        )
+        return btn
+
     def _action_button(self, label: str) -> QToolButton:
         btn = QToolButton()
         btn.setText(label)
@@ -579,7 +651,19 @@ class CameraView(QWidget):
         """把 colormap 选择持久化到 QSettings。"""
         self._settings = settings
         settings.bind_combo("camera/colormap", self.cb_cmap)
+        self._restore_auto_levels()
         self.refresh_pixel_calibration_status()
+
+    def _restore_auto_levels(self) -> None:
+        if self._settings is None:
+            return
+        val = self._settings._settings.value("camera/auto_levels", self._auto_levels)
+        on = (
+            bool(val) if isinstance(val, bool)
+            else str(val).lower() in {"1", "true", "yes", "on"}
+        )
+        self._auto_levels = on
+        self.btn_auto_levels.setChecked(on)
 
     def refresh_pixel_calibration_status(self) -> None:
         if self._settings is None:
@@ -638,11 +722,13 @@ class CameraView(QWidget):
         self._sharpness_window.clear()
         self._last_raw_frame = None
         self.sp_exp.setEnabled(False)
+        self.btn_auto_exposure.setEnabled(False)
         self.sp_gain.setEnabled(False)
         self.btn_snapshot.setEnabled(False)
         if self._recording:
             self.set_recording_state(False)
         self.btn_record.setEnabled(False)
+        self.btn_hardware_dark.setEnabled(False)
         self._advanced.reset()
         self._empty.setText(_empty_html("camera.no_signal", "camera.no_signal_hint"))
         self._image_stack.setCurrentWidget(self._empty)

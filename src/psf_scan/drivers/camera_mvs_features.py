@@ -199,82 +199,96 @@ class MVSAdvancedMixin:
     # gamma ─────────────────────────────
     def set_gamma(self, gamma: float) -> None:
         if self._connected:
-            set_gamma_value(self._cam, gamma)
+            with self._lock:
+                set_gamma_value(self._cam, gamma)
 
     def get_gamma(self) -> float | None:
         if not self._connected:
             return None
-        s = gamma_state(self._cam)
+        with self._lock:
+            s = gamma_state(self._cam)
         return None if s is None else s[0]
 
     def gamma_range(self) -> tuple[float, float] | None:
         if not self._connected:
             return None
-        s = gamma_state(self._cam)
+        with self._lock:
+            s = gamma_state(self._cam)
         return None if s is None else (s[1], s[2])
 
     # black level ──────────────────────
     def set_black_level(self, level: int) -> None:
         if self._connected:
-            set_black_level_value(self._cam, level)
+            with self._lock:
+                set_black_level_value(self._cam, level)
 
     def get_black_level(self) -> int | None:
         if not self._connected:
             return None
-        s = black_level_state(self._cam)
+        with self._lock:
+            s = black_level_state(self._cam)
         return None if s is None else s[0]
 
     def black_level_range(self) -> tuple[int, int] | None:
         if not self._connected:
             return None
-        s = black_level_state(self._cam)
+        with self._lock:
+            s = black_level_state(self._cam)
         return None if s is None else (s[1], s[2])
 
     # frame rate ───────────────────────
     def set_frame_rate(self, fps: float) -> None:
         if self._connected:
-            set_frame_rate_value(self._cam, fps)
+            with self._lock:
+                set_frame_rate_value(self._cam, fps)
 
     def get_frame_rate(self) -> float | None:
         if not self._connected:
             return None
-        s = frame_rate_state(self._cam)
+        with self._lock:
+            s = frame_rate_state(self._cam)
         return None if s is None else s[0]
 
     def frame_rate_range(self) -> tuple[float, float] | None:
         if not self._connected:
             return None
-        s = frame_rate_state(self._cam)
+        with self._lock:
+            s = frame_rate_state(self._cam)
         return None if s is None else (s[1], s[2])
 
     # pixel format ─────────────────────
     def set_pixel_format(self, fmt: str) -> None:
         if self._connected:
-            set_pixel_format_value(self._cam, fmt)
+            with self._lock:
+                set_pixel_format_value(self._cam, fmt)
 
     def get_pixel_format(self) -> str | None:
         if not self._connected:
             return None
-        cur, _ = pixel_format_state(self._cam)
+        with self._lock:
+            cur, _ = pixel_format_state(self._cam)
         return cur
 
     def pixel_formats(self) -> tuple[str, ...]:
         if not self._connected:
             return ()
-        _, options = pixel_format_state(self._cam)
+        with self._lock:
+            _, options = pixel_format_state(self._cam)
         return tuple(options)
 
     # hardware dark-field ────────────────
     def try_enable_hardware_dark(self) -> bool:
         if not self._connected:
             return False
-        node = engage_hardware_dark(self._cam)
+        with self._lock:
+            node = engage_hardware_dark(self._cam)
         self._hw_dark_node = node
         return node is not None
 
     def disable_hardware_dark(self) -> None:
         if self._connected:
-            disengage_hardware_dark(self._cam, self._hw_dark_node)
+            with self._lock:
+                disengage_hardware_dark(self._cam, self._hw_dark_node)
         self._hw_dark_node = None
 
     @property
@@ -288,4 +302,8 @@ class MVSAdvancedMixin:
     def trigger_hardware_dark_calibration(self) -> str | None:
         if not self._connected:
             return None
-        return trigger_hardware_dark(self._cam)
+        with self._lock:
+            node = trigger_hardware_dark(self._cam)
+        if node is not None:
+            self._hw_dark_node = node
+        return node

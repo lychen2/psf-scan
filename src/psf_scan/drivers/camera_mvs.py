@@ -180,6 +180,7 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
             return
         ret = self._cam.MV_CC_OpenDevice(MV_ACCESS_Exclusive, 0)
         if ret != 0:
+            self._cam.MV_CC_DestroyHandle()
             self.error.emit(f"OpenDevice 失败: 0x{ret:x}")
             return
         # 显式设连续采集 + 关触发，并校验
@@ -200,15 +201,16 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
         # 单帧最大占用 (Mono16 上限 2 字节/px)
         self._buf_size = self._w * self._h * 2
         self._raw_buf = (c_ubyte * self._buf_size)()
-        self.set_exposure_us(self._exposure_us)
         self._connected = True
+        self.set_exposure_us(self._exposure_us)
 
     def disconnect(self) -> None:
         if self._streaming:
             self.stop_streaming()
         if self._connected:
-            self._cam.MV_CC_CloseDevice()
-            self._cam.MV_CC_DestroyHandle()
+            with self._lock:
+                self._cam.MV_CC_CloseDevice()
+                self._cam.MV_CC_DestroyHandle()
             self._connected = False
         self._raw_buf = None
 
@@ -216,7 +218,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
         if not self._connected:
             self.error.emit("相机未连接")
             return
-        ret = self._cam.MV_CC_StartGrabbing()
+        with self._lock:
+            ret = self._cam.MV_CC_StartGrabbing()
         if ret != 0:
             self.error.emit(f"StartGrabbing 失败: 0x{ret:x}")
             return
@@ -232,7 +235,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
             self._stream_thread.join(timeout=1.0)
             self._stream_thread = None
         if self._connected:
-            self._cam.MV_CC_StopGrabbing()
+            with self._lock:
+                self._cam.MV_CC_StopGrabbing()
         self._set_preview_pending(False)
 
     def grab_one(self, timeout_ms: int = 1000) -> np.ndarray:
@@ -241,13 +245,15 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def set_exposure_us(self, us: int) -> None:
         self._exposure_us = int(us)
         if self._connected:
-            ret = self._cam.MV_CC_SetFloatValue("ExposureTime", float(us))
+            with self._lock:
+                ret = self._cam.MV_CC_SetFloatValue("ExposureTime", float(us))
             if ret != 0:
                 self.error.emit(f"ExposureTime 设置失败: 0x{ret:x}")
 
     def set_gain(self, gain: float) -> None:
         if self._connected:
-            ret = self._cam.MV_CC_SetFloatValue("Gain", float(gain))
+            with self._lock:
+                ret = self._cam.MV_CC_SetFloatValue("Gain", float(gain))
             if ret != 0:
                 self.error.emit(f"Gain 设置失败: 0x{ret:x}")
 
@@ -274,7 +280,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def get_exposure_us(self) -> int:
         if not self._connected:
             return self._exposure_us
-        state = get_float(self._cam, "ExposureTime")
+        with self._lock:
+            state = get_float(self._cam, "ExposureTime")
         if state is None:
             raise RuntimeError("读取 ExposureTime 失败")
         return int(round(state[0]))
@@ -282,7 +289,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def get_gain(self) -> float:
         if not self._connected:
             return 1.0
-        state = get_float(self._cam, "Gain")
+        with self._lock:
+            state = get_float(self._cam, "Gain")
         if state is None:
             raise RuntimeError("读取 Gain 失败")
         return float(state[0])
@@ -290,7 +298,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def exposure_range(self) -> tuple[int, int]:
         if not self._connected:
             return (10, 1_000_000)
-        state = get_float(self._cam, "ExposureTime")
+        with self._lock:
+            state = get_float(self._cam, "ExposureTime")
         if state is None:
             raise RuntimeError("读取 ExposureTime 范围失败")
         return (int(round(state[1])), int(round(state[2])))
@@ -298,7 +307,8 @@ class MVSCamera(MVSAdvancedMixin, CameraBase):
     def gain_range(self) -> tuple[float, float]:
         if not self._connected:
             return (0.0, 32.0)
-        state = get_float(self._cam, "Gain")
+        with self._lock:
+            state = get_float(self._cam, "Gain")
         if state is None:
             raise RuntimeError("读取 Gain 范围失败")
         return (float(state[1]), float(state[2]))

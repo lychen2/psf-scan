@@ -47,6 +47,8 @@ _DICT: dict[str, dict[str, str]] = {
     "status.change": {"zh": "更改…", "en": "change…"},
     "status.offline": {"zh": "未连接", "en": "offline"},
     "status.online": {"zh": "在线", "en": "online"},
+    "status.connecting": {"zh": "连接中", "en": "connecting"},
+    "status.already_connected": {"zh": "设备已连接", "en": "devices already connected"},
     "status.disconnect_link": {"zh": "断开", "en": "disconnect"},
     "status.scanning": {"zh": "扫描中", "en": "scanning"},
     "status.saved": {"zh": "已保存", "en": "saved"},
@@ -219,6 +221,18 @@ _DICT: dict[str, dict[str, str]] = {
     "tip.record": {
         "zh": "录像 · 按当前帧率保存到数据目录",
         "en": "Record live video to current data folder",
+    },
+    "tip.auto_levels": {
+        "zh": "仅调整实时画面的显示亮度范围，不改变相机曝光、增益或保存数据",
+        "en": "Adjust live display range only; exposure, gain, and saved data are unchanged",
+    },
+    "tip.auto_exposure": {
+        "zh": "按当前画面峰值自动调曝光时间，把峰值压到满量程约 80%",
+        "en": "Tune exposure from live peak to about 80% of full scale",
+    },
+    "tip.hardware_dark": {
+        "zh": "盖住镜头后触发相机端暗场/NUC；优先使用硬件校正，避免软件减暗场",
+        "en": "With lens capped, trigger camera-side dark/NUC; prefer hardware correction over software subtraction",
     },
     "tip.colormap": {
         "zh": "实时画面伪彩 · 灰阶最忠实, viridis 对比好",
@@ -902,6 +916,20 @@ _DICT: dict[str, dict[str, str]] = {
         "zh": "FWHM = {fwhm:.3f} {unit} · 中心 {center:.3f} · R² {r2:.3f}",
         "en": "FWHM = {fwhm:.3f} {unit} · center {center:.3f} · R² {r2:.3f}",
     },
+    "camera.auto_exposure": {"zh": "自动曝光", "en": "Auto Exp"},
+    "camera.auto_levels": {"zh": "显示范围", "en": "Levels"},
+    "camera.hardware_dark": {"zh": "硬件暗场", "en": "HW Dark"},
+    "camera.auto_exposure_running": {"zh": "自动曝光中 · 等待画面稳定", "en": "auto exposure · waiting for frames"},
+    "camera.auto_exposure_done": {"zh": "自动曝光完成 · {exposure} µs", "en": "auto exposure done · {exposure} µs"},
+    "camera.auto_exposure_failed": {"zh": "自动曝光失败: {msg}", "en": "auto exposure failed: {msg}"},
+    "camera.auto_exposure_scanning": {"zh": "扫描中不调整曝光。", "en": "Exposure is locked while scanning."},
+    "camera.hardware_dark_prompt": {
+        "zh": "请盖住镜头或挡光后继续。相机会尝试执行硬件暗场/NUC，并启用无软件暗场文件的暗场校正。",
+        "en": "Cap or block the lens first. The camera will try hardware dark/NUC and enable dark correction without a software dark file.",
+    },
+    "camera.hardware_dark_active": {"zh": "硬件暗场已启用 · {node}", "en": "hardware dark active · {node}"},
+    "camera.hardware_dark_failed": {"zh": "硬件暗场失败: {msg}", "en": "hardware dark failed: {msg}"},
+    "camera.hardware_dark_unavailable": {"zh": "当前相机不支持硬件暗场命令。", "en": "This camera does not expose a hardware dark command."},
     "camera.line_profile_tool": {"zh": "Line", "en": "Line"},
     "tip.line_profile_tool": {
         "zh": "打开 line profile 工具: 图像上画一条线测沿线强度 + 高斯 FWHM。再次点击关闭。",

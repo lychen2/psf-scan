@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 import logging
 from pathlib import Path
 import time
@@ -113,6 +114,10 @@ class MainWindow(QMainWindow):
         self._diagnostic_timer = QTimer(self)
         self._diagnostic_timer.setInterval(5000)
         self._diagnostic_timer.timeout.connect(self._log_diagnostics)
+        self._connecting = False
+        self._auto_exposure_active = False
+        self._auto_exposure_steps = 0
+        self._auto_exposure_last_set_s = 0.0
         # 应用启动时确定语言
         set_language(self._settings.language())
         self._axis_signs = self._compute_axis_signs()
@@ -265,6 +270,8 @@ class MainWindow(QMainWindow):
         self.stage_jog.reset_range_requested.connect(self._on_reset_range)
         self.cam_view.metrics_changed.connect(self.status_strip.set_camera)
         self.cam_view.exposure_changed.connect(self._on_exposure_changed)
+        self.cam_view.auto_exposure_requested.connect(self._on_auto_exposure_requested)
+        self.cam_view.hardware_dark_requested.connect(self._on_hardware_dark_requested)
         self.cam_view.gain_changed.connect(self._on_gain_changed)
         self.cam_view.gamma_changed.connect(self._on_gamma_changed)
         self.cam_view.black_level_changed.connect(self._on_black_level_changed)
@@ -328,7 +335,25 @@ class MainWindow(QMainWindow):
 
     @Slot(str, str)
     def _on_connect(self, stage_kind: str, cam_kind: str) -> None:
+        if self._connecting:
+            self.status_strip.set_message(tr("status.connecting"))
+            return
+        if self._stage is not None or self._camera is not None:
+            self.status_strip.set_message(tr("status.already_connected"))
+            return
+        self._connecting = True
+        self.status_strip.set_connect_enabled(False)
         _log.info("connect requested stage=%s camera=%s", stage_kind, cam_kind)
+        try:
+            self._connect_devices(stage_kind, cam_kind)
+        finally:
+            self._connecting = False
+            if self._stage is None and self._camera is None:
+                self.status_strip.set_connect_enabled(True)
+
+    def _connect_devices(self, stage_kind: str, cam_kind: str) -> None:
+        stage: StageBase | None = None
+        camera: CameraBase | None = None
         stage_kwargs = self._stage_kwargs(stage_kind)
         if stage_kwargs is None:
             return  # 用户取消 FRF 警告
@@ -358,22 +383,22 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             _log.exception("stage.connect failed")
             QMessageBox.critical(self, "启动失败", f"位移台连接失败:\n{exc}")
-            self._stop_stage_thread()
+            self._cleanup_failed_connect(stage, camera)
             return
         if not stage.is_connected:
             QMessageBox.critical(self, "启动失败", "位移台连接失败。")
-            self._stop_stage_thread()
+            self._cleanup_failed_connect(stage, camera)
             return
         try:
             camera.connect()
         except Exception as exc:  # noqa: BLE001
             _log.exception("camera.connect failed")
             QMessageBox.critical(self, "启动失败", f"相机连接失败:\n{exc}")
-            try:
-                stage.disconnect()
-            except Exception:  # noqa: BLE001
-                pass
-            self._stop_stage_thread()
+            self._cleanup_failed_connect(stage, camera)
+            return
+        if not camera.is_connected:
+            QMessageBox.critical(self, "启动失败", "相机连接失败。")
+            self._cleanup_failed_connect(stage, camera)
             return
         try:
             self._restore_camera_settings(camera)
@@ -398,15 +423,11 @@ class MainWindow(QMainWindow):
         except Exception as exc:  # noqa: BLE001
             _log.exception("camera.start_streaming failed")
             QMessageBox.critical(self, "启动失败", f"相机出帧启动失败:\n{exc}")
-            try:
-                camera.disconnect()
-            except Exception:  # noqa: BLE001
-                pass
-            try:
-                stage.disconnect()
-            except Exception:  # noqa: BLE001
-                pass
-            self._stop_stage_thread()
+            self._cleanup_failed_connect(stage, camera)
+            return
+        if not camera.is_streaming:
+            QMessageBox.critical(self, "启动失败", "相机出帧启动失败。")
+            self._cleanup_failed_connect(stage, camera)
             return
 
         # jog panel 同步当前 stage 限位/速度/步长
@@ -432,6 +453,7 @@ class MainWindow(QMainWindow):
         self.cam_view.configure_advanced(camera)
         self.cam_view.set_gamma_enabled(self._settings.gamma_enabled())
         self._stage, self._camera = stage, camera
+        self.status_strip.set_connect_enabled(True)
         self.control.set_connected(True)
         self.control.set_autofocus_allowed(self._settings.autofocus_enabled())
         device_text = self._device_summary(stage, stage_kind, camera)
@@ -439,6 +461,21 @@ class MainWindow(QMainWindow):
         self.status_strip.set_device_label(device_text)
         self.status_strip.set_message(device_text)
         self.statusBar().showMessage(f"connected · {device_text}", 5000)
+
+    def _cleanup_failed_connect(self, stage: StageBase | None, camera: CameraBase | None) -> None:
+        if camera is not None:
+            self._unwire_preview_backpressure(camera)
+            try:
+                camera.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+        if stage is not None:
+            try:
+                stage.disconnect()
+            except Exception:  # noqa: BLE001
+                pass
+        self._stop_stage_thread()
+        self._calibration_config = None
 
     def _start_stage_thread(self, stage_kind: str, stage: StageBase) -> None:
         if stage_kind.lower() not in {"pi-m531", "pi", "m531"}:
@@ -486,6 +523,7 @@ class MainWindow(QMainWindow):
     @Slot(object, float)
     def _on_camera_frame(self, frame, ts: float) -> None:
         raw_peak = int(frame.max())
+        self._auto_exposure_step(raw_peak)
         shown = self._apply_calibration_for_preview(frame)
         self.cam_view.update_frame(
             shown,
@@ -561,6 +599,12 @@ class MainWindow(QMainWindow):
             except Exception:  # noqa: BLE001
                 pass
             return replace(cfg, hardware_dark_active=False, hardware_dark_node=None)
+        if cfg.dark_enabled and cam.hardware_dark_active:
+            return replace(
+                cfg,
+                hardware_dark_active=True,
+                hardware_dark_node=cam.hardware_dark_node,
+            )
         try:
             active = bool(cam.try_enable_hardware_dark())
         except Exception:  # noqa: BLE001
@@ -571,6 +615,88 @@ class MainWindow(QMainWindow):
         else:
             _log.info("hardware dark-field unavailable; software subtraction path active")
         return replace(cfg, hardware_dark_active=active, hardware_dark_node=node)
+
+    @Slot()
+    def _on_auto_exposure_requested(self) -> None:
+        if self._camera is None:
+            return
+        if self.status_strip.state() == STATE_SCANNING:
+            QMessageBox.warning(self, tr("common.warning"), tr("camera.auto_exposure_scanning"))
+            return
+        self._auto_exposure_active = True
+        self._auto_exposure_steps = 0
+        self._auto_exposure_last_set_s = 0.0
+        self.status_strip.set_message(tr("camera.auto_exposure_running"))
+
+    def _auto_exposure_step(self, peak: int) -> None:
+        if not self._auto_exposure_active or self._camera is None:
+            return
+        now = time.perf_counter()
+        if now - self._auto_exposure_last_set_s < 0.25:
+            return
+        max_value = max(1.0, float(self.cam_view.max_value()))
+        target = max_value * 0.80
+        tolerance = max_value * 0.04
+        if abs(float(peak) - target) <= tolerance and peak < max_value * 0.98:
+            self._finish_auto_exposure(tr("camera.auto_exposure_done", exposure=self._camera.get_exposure_us()))
+            return
+        try:
+            current = int(self._camera.get_exposure_us())
+            lo, hi = self._camera.exposure_range()
+            scale = target / max(1.0, float(peak))
+            scale = min(2.0, max(0.25, scale))
+            next_exposure = int(round(current * scale))
+            next_exposure = min(int(hi), max(int(lo), next_exposure))
+            if next_exposure == current:
+                self._finish_auto_exposure(tr("camera.auto_exposure_done", exposure=current))
+                return
+            self._camera.set_exposure_us(next_exposure)
+            self._settings.set_value("camera/exposure_us", next_exposure)
+            self.cam_view.set_exposure_value(next_exposure)
+        except Exception as exc:  # noqa: BLE001
+            self._finish_auto_exposure(tr("camera.auto_exposure_failed", msg=str(exc)))
+            return
+        self._auto_exposure_steps += 1
+        self._auto_exposure_last_set_s = now
+        if self._auto_exposure_steps >= 8:
+            self._finish_auto_exposure(tr("camera.auto_exposure_done", exposure=next_exposure))
+
+    def _finish_auto_exposure(self, message: str) -> None:
+        self._auto_exposure_active = False
+        self.status_strip.set_message(message)
+
+    @Slot()
+    def _on_hardware_dark_requested(self) -> None:
+        camera = self._camera
+        if camera is None:
+            return
+        ret = QMessageBox.question(
+            self,
+            tr("camera.hardware_dark"),
+            tr("camera.hardware_dark_prompt"),
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if ret != QMessageBox.Yes:
+            return
+        try:
+            node = camera.trigger_hardware_dark_calibration()
+            if node is None and camera.try_enable_hardware_dark():
+                node = camera.hardware_dark_node
+            if node is None and camera.hardware_dark_active:
+                node = camera.hardware_dark_node
+        except Exception as exc:  # noqa: BLE001
+            QMessageBox.warning(self, tr("common.warning"), tr("camera.hardware_dark_failed", msg=str(exc)))
+            return
+        if node is None:
+            QMessageBox.warning(self, tr("common.warning"), tr("camera.hardware_dark_unavailable"))
+            return
+        raw = self._settings.calibration_config()
+        raw["dark_enabled"] = True
+        raw["dark_path"] = ""
+        self._settings.set_calibration_config(raw)
+        self._refresh_calibration_config(show_errors=True)
+        self.status_strip.set_message(tr("camera.hardware_dark_active", node=node))
 
     @Slot(int)
     def _on_exposure_changed(self, exposure_us: int) -> None:
@@ -610,6 +736,10 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _on_disconnect(self) -> None:
+        if self._connecting:
+            self.status_strip.set_message(tr("status.connecting"))
+            return
+        self._auto_exposure_active = False
         if self._recorder.is_recording:
             self.cam_view.set_recording_state(False)
         if self._camera:
@@ -628,6 +758,7 @@ class MainWindow(QMainWindow):
                 self._stage = None
                 self._stop_stage_thread()
         self.stage_jog.set_enabled(False)
+        self.status_strip.set_connect_enabled(True)
         self.control.set_connected(False)
         self.cam_view.reset(); self.stage_view.clear_path()
         self.status_strip.set_state(STATE_IDLE, tr("status.offline"))

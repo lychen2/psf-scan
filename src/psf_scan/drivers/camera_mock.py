@@ -62,6 +62,7 @@ class MockCamera(CameraBase):
         self._gain = 1.0
         self._gamma = 1.0
         self._black_level = 0
+        self._hardware_dark_active = False
         self._connected = False
         self._streaming = False
         self._rng = np.random.default_rng()
@@ -202,6 +203,25 @@ class MockCamera(CameraBase):
             return
         self._mode = fmt
 
+    def try_enable_hardware_dark(self) -> bool:
+        self._hardware_dark_active = True
+        return True
+
+    def disable_hardware_dark(self) -> None:
+        self._hardware_dark_active = False
+
+    @property
+    def hardware_dark_active(self) -> bool:
+        return self._hardware_dark_active
+
+    @property
+    def hardware_dark_node(self) -> str | None:
+        return "mock_dark" if self._hardware_dark_active else None
+
+    def trigger_hardware_dark_calibration(self) -> str | None:
+        self._hardware_dark_active = True
+        return "mock_dark"
+
     @Slot()
     def _produce_frame(self) -> None:
         self.frame_ready.emit(self._render(), time.time())
@@ -222,7 +242,8 @@ class MockCamera(CameraBase):
         # 振幅归一：在焦衍射极限峰 → peak_counts；其它情况按物理峰值缩放
         scale = self._peak / max(1e-12, self._psf.ref_peak)
         sig = cropped * scale * (self._exposure_us / 10_000.0 * self._gain)
-        bg = self._dark * (self._exposure_us / 10_000.0) + self._black_level
+        dark = 0.0 if self._hardware_dark_active else self._dark
+        bg = dark * (self._exposure_us / 10_000.0) + self._black_level
         noisy = self._rng.poisson(np.clip(sig, 0, None) + bg).astype(np.float32)
         if self._gamma != 1.0:
             noisy = np.power(np.clip(noisy / self._max_val, 0.0, 1.0), 1.0 / self._gamma) * self._max_val
