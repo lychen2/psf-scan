@@ -20,45 +20,47 @@ def test_driver_scan_rs232_daisy_requires_comport_on_windows(monkeypatch: pytest
         pi_link.scan_rs232_daisy(DummyDev(), comport=None, baudrate=9600)
 
 
-def test_driver_scan_rs232_daisy_uses_open_return_value_on_windows(
+def test_driver_scan_rs232_daisy_uses_direct_dll_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class DummyDev:
-        def OpenRS232DaisyChain(self, comport, baudrate):
-            assert comport == 3
-            assert baudrate == 9600
-            return ["1 C-863", "2 M-531"]
+    state = {"closed": False}
 
-        def CloseDaisyChain(self) -> None:
-            pass
+    class DummyDev:
+        pass
 
     monkeypatch.setattr(pi_link, "_is_linux", lambda: False)
+    monkeypatch.setattr(
+        pi_link,
+        "_dll_rs232_daisy_open_com",
+        lambda dev, comport, baudrate: (7, 2, ["1 C-863", "2 M-531"]),
+    )
+    monkeypatch.setattr(pi_link, "_dll_rs232_daisy_close", lambda dev: state.update(closed=True))
 
     items = pi_link.scan_rs232_daisy(DummyDev(), comport=3, baudrate=9600)
 
     assert items == ["1 C-863", "2 M-531"]
+    assert state["closed"] is True
 
 
-def test_open_daisy_rs232_uses_internal_handle_on_windows(
+def test_open_daisy_rs232_uses_direct_dll_handle_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state = {"connected": None}
 
     class DummyDev:
-        dcid = 7
-
-        def OpenRS232DaisyChain(self, comport, baudrate):
-            assert comport == 3
-            assert baudrate == 9600
-            return ["1 C-863", "2 M-531"]
-
-        def ConnectDaisyChainDevice(self, device_id, dcid=None):
-            state["connected"] = (device_id, dcid)
-
-        def CloseDaisyChain(self) -> None:
-            pass
+        pass
 
     monkeypatch.setattr(pi_link, "_is_linux", lambda: False)
+    monkeypatch.setattr(
+        pi_link,
+        "_dll_rs232_daisy_open_com",
+        lambda dev, comport, baudrate: (7, 2, ["1 C-863", "2 M-531"]),
+    )
+    monkeypatch.setattr(
+        pi_link,
+        "_dll_rs232_daisy_connect",
+        lambda dev, dcid, device_id: state.update(connected=(dcid, device_id)),
+    )
 
     dcid = pi_link.open_link(
         DummyDev(),
@@ -70,7 +72,7 @@ def test_open_daisy_rs232_uses_internal_handle_on_windows(
     )
 
     assert dcid == 7
-    assert state["connected"] == (1, None)
+    assert state["connected"] == (7, 1)
 
 
 def test_open_usb_daisy_uses_internal_handle_on_windows(

@@ -131,29 +131,69 @@ def _find_pi_serial_port() -> Optional[str]:
 
 
 def _dll_rs232_daisy_open(gcsdevice, port: str, baudrate: int) -> tuple[int, int, list[str]]:
-    """直接调 libpi_pi_gcs2 的 OpenRS232DaisyChainByDevName (Linux)。
-
-    返回 (dcid, numdev, [device_descriptions])。失败抛 GCSError。
-    """
+    """直接调 Linux OpenRS232DaisyChainByDevName。"""
     from pipython.pidevice.interfaces.gcsdll import PI_DLL_CODEPAGE
+
     dll = gcsdevice.dll
     cdevname = ctypes.c_char_p(port.encode(PI_DLL_CODEPAGE))
     cbaudrate = ctypes.c_int(int(baudrate))
+    dcid, numdev, devlist = _call_open_rs232_daisy(
+        dll,
+        dll._prefix + "OpenRS232DaisyChainByDevName",
+        cdevname,
+        cbaudrate,
+        baudrate=int(baudrate),
+        label=f"{port}",
+    )
+    dll._dcid = dcid
+    dll._ifdescription = f"RS-232 daisy chain at {port}, {baudrate} Baud"
+    return dcid, numdev, devlist
+
+
+def _dll_rs232_daisy_open_com(gcsdevice, comport: int, baudrate: int) -> tuple[int, int, list[str]]:
+    """直接调 Windows OpenRS232DaisyChain，避开 PIPython 失败时的 -9 包装。"""
+    dll = gcsdevice.dll
+    ccomport = ctypes.c_int(int(comport))
+    cbaudrate = ctypes.c_int(int(baudrate))
+    dcid, numdev, devlist = _call_open_rs232_daisy(
+        dll,
+        dll._prefix + "OpenRS232DaisyChain",
+        ccomport,
+        cbaudrate,
+        baudrate=int(baudrate),
+        label=f"COM{int(comport)}",
+    )
+    dll._dcid = dcid
+    dll._ifdescription = f"RS-232 daisy chain at COM{int(comport)}, {baudrate} Baud"
+    return dcid, numdev, devlist
+
+
+def _call_open_rs232_daisy(dll, function_name: str, port_arg, baud_arg, *, baudrate: int, label: str):
+    from pipython.pidevice import GCSError
+    from pipython.pidevice.interfaces.gcsdll import PI_DLL_CODEPAGE
+
     numdev = ctypes.c_int()
     bufsize = 10000
     bufstr = ctypes.create_string_buffer(b"\x00", bufsize + 2)
-    dcid = getattr(dll._handle, dll._prefix + "OpenRS232DaisyChainByDevName")(
-        cdevname, cbaudrate, ctypes.byref(numdev), bufstr, bufsize
+    dcid = getattr(dll._handle, function_name)(
+        port_arg, baud_arg, ctypes.byref(numdev), bufstr, bufsize
     )
     if dcid < 0:
-        from pipython.pidevice import GCSError
-        err = getattr(dll._handle, dll._prefix + "GetError")(dcid)
-        raise GCSError(err)
+        err = _dll_error(dll, dcid)
+        raise RuntimeError(
+            f"RS-232 Daisy 扫描失败: {GCSError(err)} "
+            f"(返回 {dcid}, {label}@{baudrate}). "
+            "若此 COM 口只连着一个 C-863 控制器，请选择 rs232 直连。"
+        )
     devlist = bufstr.value.decode(encoding=PI_DLL_CODEPAGE, errors="ignore").split("\n")
-    devlist = [item.strip() for item in devlist if item.strip()]
-    dll._dcid = dcid
-    dll._ifdescription = f"RS-232 daisy chain at {port}, {baudrate} Baud"
-    return dcid, numdev.value, devlist
+    return dcid, numdev.value, [item.strip() for item in devlist if item.strip()]
+
+
+def _dll_error(dll, connection_id: int) -> int:
+    try:
+        return int(getattr(dll._handle, dll._prefix + "GetError")(int(connection_id)))
+    except Exception:  # noqa: BLE001
+        return int(connection_id)
 
 
 def _dll_rs232_daisy_close(gcsdevice) -> None:
@@ -287,14 +327,9 @@ def _open_daisy_rs232(
         if dcid < 0:
             raise RuntimeError(f"菊花链连接失败 (已尝试 baud={baud_rates}): {last_err}")
     else:
-        # Windows: PIPython returns the device list; it keeps the daisy-chain
-        # handle internally and ConnectDaisyChainDevice() reads it when the
-        # daisychainid argument is omitted.
         if comport is None:
             raise RuntimeError("RS232-Daisy 模式缺 COM 端口号")
-        devlist = list(dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate)) or [])
-        dcid = _current_daisy_id(dev)
-        numdev = len(devlist)
+        dcid, numdev, devlist = _dll_rs232_daisy_open_com(dev, int(comport), int(baudrate))
 
     if numdev == 0:
         _dll_rs232_daisy_close(dev) if _is_linux() else dev.CloseDaisyChain()
@@ -309,7 +344,7 @@ def _open_daisy_rs232(
     if _is_linux():
         _dll_rs232_daisy_connect(dev, dcid, target_id)
     else:
-        dev.ConnectDaisyChainDevice(target_id)
+        _dll_rs232_daisy_connect(dev, dcid, target_id)
 
     # 把 devlist 写回 dev.dcdevices (GCSDevice 用 property 动态读 dll, 直接设不行,
     # 但 scan_rs232_daisy 返回 list 给上层染色)
@@ -348,10 +383,7 @@ def close_link(dev, daisychain_id: Optional[int]) -> None:
         pass
     if daisychain_id is not None:
         try:
-            if _is_linux():
-                _dll_rs232_daisy_close(dev)
-            else:
-                dev.CloseDaisyChain()
+            _dll_rs232_daisy_close(dev)
         except Exception:  # noqa: BLE001
             pass
 
@@ -370,15 +402,12 @@ def scan_rs232_daisy(dev, comport=None, baudrate: int = 115200, serialport: str 
     else:
         if comport is None:
             raise RuntimeError("未设置 COM 端口号")
-        devlist = list(dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate)) or [])
+        _dcid, _numdev, devlist = _dll_rs232_daisy_open_com(dev, int(comport), int(baudrate))
     try:
         return devlist
     finally:
         try:
-            if _is_linux():
-                _dll_rs232_daisy_close(dev)
-            else:
-                dev.CloseDaisyChain()
+            _dll_rs232_daisy_close(dev)
         except Exception:  # noqa: BLE001
             pass
 
