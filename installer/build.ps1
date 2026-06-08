@@ -11,10 +11,10 @@
 # installer and silently invoked during install. If absent (e.g. CI), the
 # installer is built without it and a warning is emitted.
 #
-# If installer\vendored\PI_GCS2_DLL_x64.dll is present, it is bundled next to
-# PsfScan.exe so PI stages work without a separate GCSTranslator install.
-# GitHub Actions cannot ship that proprietary DLL; release builds from CI will
-# warn and require users to install PI Software Suite separately.
+# If installer\vendored\PI_GCS2_DLL_x64.dll is present, it is bundled into
+# the PyInstaller onedir payload so PI stages work without a separate
+# GCSTranslator install. The release workflow restores this DLL from the
+# pi-runtime GitHub release asset before running this script.
 #
 # Prerequisites: see docs/build/RELEASE_WINDOWS.md §A (one-time environment setup).
 

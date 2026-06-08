@@ -66,14 +66,33 @@ class PIStageConfig:
 
 
 def find_bundled_gcs2_dll() -> Optional[Path]:
-    """Return the bundled Windows PI GCS2 DLL path when packaged with PyInstaller."""
+    """Return a packaged or user-placed Windows PI GCS2 DLL path."""
     if sys.platform != "win32":
         return None
-    base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
-    dll = base / "PI_GCS2_DLL_x64.dll"
-    if dll.is_file():
-        return dll
+    for base in _gcs2_dll_search_dirs():
+        dll = base / "PI_GCS2_DLL_x64.dll"
+        if dll.is_file():
+            return dll
     return None
+
+
+def _gcs2_dll_search_dirs() -> list[Path]:
+    """Search PyInstaller's internal dir, the exe dir, then the launch dir."""
+    dirs: list[Path] = []
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        dirs.append(Path(meipass))
+    dirs.append(Path(sys.executable).resolve().parent)
+    dirs.append(Path.cwd())
+    unique: list[Path] = []
+    seen: set[Path] = set()
+    for path in dirs:
+        resolved = path.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        unique.append(resolved)
+    return unique
 
 
 def _is_linux() -> bool:

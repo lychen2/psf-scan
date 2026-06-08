@@ -1,4 +1,5 @@
 from pathlib import Path
+import sys
 import tomllib
 
 
@@ -28,6 +29,12 @@ def test_pyinstaller_includes_pyserial_modules() -> None:
     assert "support_contact.json" in text
 
 
+def test_release_workflow_restores_pi_gcs2_dll() -> None:
+    text = (REPO / ".github" / "workflows" / "build-and-release.yml").read_text(encoding="utf-8")
+    assert "gh release download pi-runtime" in text
+    assert "PI_GCS2_DLL_x64.dll was not packaged" in text
+
+
 def test_pi_stage_uses_bundled_gcs2_dll(monkeypatch) -> None:
     from psf_scan.drivers.stage_pi import PIStage
 
@@ -47,6 +54,32 @@ def test_pi_stage_uses_bundled_gcs2_dll(monkeypatch) -> None:
     assert stage._make_gcs_device(FakeGCSDevice, "C-863")
     assert captured["controller"] == "C-863"
     assert Path(captured["gcsdll"]) == Path("C:/app/PI_GCS2_DLL_x64.dll")
+
+
+def test_pi_link_finds_meipass_gcs2_dll(monkeypatch, tmp_path) -> None:
+    from psf_scan.drivers import pi_link
+
+    dll = tmp_path / "_internal" / "PI_GCS2_DLL_x64.dll"
+    dll.parent.mkdir()
+    dll.write_bytes(b"dll")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "_MEIPASS", str(dll.parent), raising=False)
+
+    assert pi_link.find_bundled_gcs2_dll() == dll
+
+
+def test_pi_link_finds_exe_dir_gcs2_dll(monkeypatch, tmp_path) -> None:
+    from psf_scan.drivers import pi_link
+
+    app_dir = tmp_path / "PsfScan"
+    app_dir.mkdir()
+    dll = app_dir / "PI_GCS2_DLL_x64.dll"
+    dll.write_bytes(b"dll")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    monkeypatch.setattr(sys, "executable", str(app_dir / "PsfScan.exe"))
+
+    assert pi_link.find_bundled_gcs2_dll() == dll
 
 
 def test_pi_stage_formats_missing_gcs2_dll_error() -> None:

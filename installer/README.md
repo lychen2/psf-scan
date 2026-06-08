@@ -35,7 +35,7 @@ PSF Scan 的 Windows 打包资产。
 [OK] SHA256: <hash>
 ```
 
-PI 位移台需要 PI 官方 GCS2 运行时。私有 Windows 构建时，把 `PI_GCS2_DLL_x64.dll` 放到 `installer/vendored/`，PyInstaller 会把它打到 `PsfScan.exe` 同目录；公开 CI 构建不携带该专有 DLL，用户需安装 PI Software Suite / GCSTranslator，或手动把 DLL 放到安装目录。
+PI 位移台需要 PI 官方 GCS2 运行时。本地 Windows 构建时，把 `PI_GCS2_DLL_x64.dll` 放到 `installer/vendored/`；发布 workflow 会先从 `pi-runtime` GitHub release asset 恢复该 DLL。PyInstaller 会把它打进 onedir payload，程序启动时会依次查找 `_internal/`、`PsfScan.exe` 所在目录和启动目录。
 
 ## 联系方式
 

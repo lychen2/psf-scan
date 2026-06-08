@@ -49,9 +49,29 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: .\.venv-build\Scripts\python.exe -m pytest tests/ -q
 
+      - name: Restore PI GCS2 DLL
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $dest = "installer\vendored"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          gh release download pi-runtime --pattern "PI_GCS2_DLL_x64.dll" --dir $dest --clobber
+          $dll = Join-Path $dest "PI_GCS2_DLL_x64.dll"
+          if (-not (Test-Path $dll)) { throw "PI_GCS2_DLL_x64.dll missing from pi-runtime release asset" }
+          $sha = (Get-FileHash $dll -Algorithm SHA256).Hash
+          Write-Host "[build] restored PI_GCS2_DLL_x64.dll SHA256=$sha"
+
       - name: Build installer + portable zip
         shell: pwsh
         run: .\installer\build.ps1
+
+      - name: Validate PI GCS2 DLL packaged
+        shell: pwsh
+        run: |
+          $hits = Get-ChildItem "build\dist\PsfScan" -Recurse -Filter "PI_GCS2_DLL_x64.dll"
+          if (-not $hits) { throw "PI_GCS2_DLL_x64.dll was not packaged into build\dist\PsfScan" }
+          $hits | ForEach-Object { Write-Host "[build] packaged PI DLL: $($_.FullName)" }
 
       - name: Smoke test PsfScan.exe
         shell: pwsh
