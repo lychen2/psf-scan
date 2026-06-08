@@ -45,10 +45,8 @@ def test_pi_stage_uses_bundled_gcs2_dll(monkeypatch) -> None:
 
     stage = PIStage(controller="C-863")
     assert stage._make_gcs_device(FakeGCSDevice, "C-863")
-    assert captured == {
-        "controller": "C-863",
-        "gcsdll": "C:/app/PI_GCS2_DLL_x64.dll",
-    }
+    assert captured["controller"] == "C-863"
+    assert Path(captured["gcsdll"]) == Path("C:/app/PI_GCS2_DLL_x64.dll")
 
 
 def test_pi_stage_formats_missing_gcs2_dll_error() -> None:

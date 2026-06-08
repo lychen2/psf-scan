@@ -5,8 +5,8 @@
 
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 1, 7, 0),
-    prodvers=(1, 1, 7, 0),
+    filevers=(1, 1, 6, 0),
+    prodvers=(1, 1, 6, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -19,12 +19,12 @@ VSVersionInfo(
       StringTable('040904B0', [
         StringStruct('CompanyName', 'PSF Scan'),
         StringStruct('FileDescription', 'PSF Scan - Stage-scan PSF acquisition GUI'),
-        StringStruct('FileVersion', '1.1.7'),
+        StringStruct('FileVersion', '1.1.6'),
         StringStruct('InternalName', 'PsfScan'),
         StringStruct('LegalCopyright', 'Copyright (c) 2026'),
         StringStruct('OriginalFilename', 'PsfScan.exe'),
         StringStruct('ProductName', 'PSF Scan'),
-        StringStruct('ProductVersion', '1.1.7'),
+        StringStruct('ProductVersion', '1.1.6'),
       ])
     ]),
     VarFileInfo([VarStruct('Translation', [1033, 1200])])
