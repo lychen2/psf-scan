@@ -144,10 +144,7 @@ class PIStage(StageBase):
         return message
 
     def _make_gcs_device(self, gcs_device_type, controller: str):
-        dll_path = pi_link.find_bundled_gcs2_dll()
-        if dll_path:
-            return gcs_device_type(controller, gcsdll=str(dll_path))
-        return gcs_device_type(controller)
+        return pi_link.make_gcs_device(gcs_device_type, controller)
 
     def disconnect(self) -> None:
         self._invoke_on_stage_thread("_disconnect_on_stage_thread")

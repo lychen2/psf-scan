@@ -76,6 +76,14 @@ def find_bundled_gcs2_dll() -> Optional[Path]:
     return None
 
 
+def make_gcs_device(gcs_device_type, controller: str):
+    """Create GCSDevice with the packaged Windows DLL path when available."""
+    dll_path = find_bundled_gcs2_dll()
+    if dll_path:
+        return gcs_device_type(controller, gcsdll=str(dll_path))
+    return gcs_device_type(controller)
+
+
 def _gcs2_dll_search_dirs() -> list[Path]:
     """Search PyInstaller's internal dir, the exe dir, then the launch dir."""
     dirs: list[Path] = []
@@ -233,9 +241,13 @@ def open_link(
         desc = usb_description or serialnum or controller
         if not desc:
             raise RuntimeError("USB-Daisy 模式缺 description / serial / controller")
-        dcid = dev.OpenUSBDaisyChain(description=desc)
-        dev.ConnectDaisyChainDevice(int(device_id), dcid)
-        return dcid
+        devlist = list(dev.OpenUSBDaisyChain(description=desc) or [])
+        if not devlist:
+            dev.CloseDaisyChain()
+            raise RuntimeError("USB 菊花链上未发现设备")
+        target_id = int(device_id) if device_id is not None else _pick_first_device(devlist)
+        dev.ConnectDaisyChainDevice(target_id)
+        return _current_daisy_id(dev)
 
     # 默认 USB 直连
     if serialnum:
@@ -275,12 +287,13 @@ def _open_daisy_rs232(
         if dcid < 0:
             raise RuntimeError(f"菊花链连接失败 (已尝试 baud={baud_rates}): {last_err}")
     else:
-        # Windows: 走 PIPython wrapper
+        # Windows: PIPython returns the device list; it keeps the daisy-chain
+        # handle internally and ConnectDaisyChainDevice() reads it when the
+        # daisychainid argument is omitted.
         if comport is None:
             raise RuntimeError("RS232-Daisy 模式缺 COM 端口号")
-        dcid = dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate))
-        devlist = list(dcid or [])
-        dcid = int(getattr(dev, "dcid", -1))
+        devlist = list(dev.OpenRS232DaisyChain(comport=int(comport), baudrate=int(baudrate)) or [])
+        dcid = _current_daisy_id(dev)
         numdev = len(devlist)
 
     if numdev == 0:
@@ -296,7 +309,7 @@ def _open_daisy_rs232(
     if _is_linux():
         _dll_rs232_daisy_connect(dev, dcid, target_id)
     else:
-        dev.ConnectDaisyChainDevice(target_id, dcid)
+        dev.ConnectDaisyChainDevice(target_id)
 
     # 把 devlist 写回 dev.dcdevices (GCSDevice 用 property 动态读 dll, 直接设不行,
     # 但 scan_rs232_daisy 返回 list 给上层染色)
@@ -310,6 +323,14 @@ def _pick_first_device(devlist: list[str]) -> int:
         if d and "not connected" not in d.lower():
             return i + 1
     raise RuntimeError("菊花链上所有设备都未连接")
+
+
+def _current_daisy_id(dev) -> int:
+    """Return PIPython's current daisy-chain ID for later cleanup."""
+    try:
+        return int(getattr(dev, "dcid"))
+    except (AttributeError, TypeError, ValueError):
+        return 0
 
 
 def close_link(dev, daisychain_id: Optional[int]) -> None:

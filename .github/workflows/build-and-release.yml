@@ -69,9 +69,12 @@ jobs:
       - name: Validate PI GCS2 DLL packaged
         shell: pwsh
         run: |
-          $hits = Get-ChildItem "build\dist\PsfScan" -Recurse -Filter "PI_GCS2_DLL_x64.dll"
-          if (-not $hits) { throw "PI_GCS2_DLL_x64.dll was not packaged into build\dist\PsfScan" }
-          $hits | ForEach-Object { Write-Host "[build] packaged PI DLL: $($_.FullName)" }
+          $rootDll = "build\dist\PsfScan\PI_GCS2_DLL_x64.dll"
+          $internalDll = "build\dist\PsfScan\_internal\PI_GCS2_DLL_x64.dll"
+          if (-not (Test-Path $rootDll)) { throw "PI_GCS2_DLL_x64.dll was not copied next to PsfScan.exe" }
+          if (-not (Test-Path $internalDll)) { throw "PI_GCS2_DLL_x64.dll was not packaged into _internal" }
+          Write-Host "[build] packaged PI DLL root: $rootDll"
+          Write-Host "[build] packaged PI DLL internal: $internalDll"
 
       - name: Smoke test PsfScan.exe
         shell: pwsh

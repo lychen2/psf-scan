@@ -32,7 +32,8 @@ def test_pyinstaller_includes_pyserial_modules() -> None:
 def test_release_workflow_restores_pi_gcs2_dll() -> None:
     text = (REPO / ".github" / "workflows" / "build-and-release.yml").read_text(encoding="utf-8")
     assert "gh release download pi-runtime" in text
-    assert "PI_GCS2_DLL_x64.dll was not packaged" in text
+    assert "PI_GCS2_DLL_x64.dll was not copied next to PsfScan.exe" in text
+    assert "PI_GCS2_DLL_x64.dll was not packaged into _internal" in text
 
 
 def test_pi_stage_uses_bundled_gcs2_dll(monkeypatch) -> None:
@@ -80,6 +81,56 @@ def test_pi_link_finds_exe_dir_gcs2_dll(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(sys, "executable", str(app_dir / "PsfScan.exe"))
 
     assert pi_link.find_bundled_gcs2_dll() == dll
+
+
+def test_pi_link_finds_launch_dir_gcs2_dll(monkeypatch, tmp_path) -> None:
+    from psf_scan.drivers import pi_link
+
+    app_dir = tmp_path / "app"
+    cwd = tmp_path / "launch"
+    app_dir.mkdir()
+    cwd.mkdir()
+    dll = cwd / "PI_GCS2_DLL_x64.dll"
+    dll.write_bytes(b"dll")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    monkeypatch.setattr(sys, "executable", str(app_dir / "PsfScan.exe"))
+    monkeypatch.chdir(cwd)
+
+    assert pi_link.find_bundled_gcs2_dll() == dll
+
+
+def test_pi_scan_uses_gcs_device_factory(monkeypatch, tmp_path) -> None:
+    from psf_scan.ui import pi_scan
+
+    captured = {}
+    app_dir = tmp_path / "PsfScan"
+    app_dir.mkdir()
+    dll = app_dir / "PI_GCS2_DLL_x64.dll"
+    dll.write_bytes(b"dll")
+
+    class FakeGCSDevice:
+        def __init__(self, controller, gcsdll=""):
+            captured["controller"] = controller
+            captured["gcsdll"] = gcsdll
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return None
+
+        def EnumerateUSB(self, mask=""):
+            return ["SN123"]
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.delattr(sys, "_MEIPASS", raising=False)
+    monkeypatch.setattr(sys, "executable", str(app_dir / "PsfScan.exe"))
+    monkeypatch.setitem(sys.modules, "pipython", type("P", (), {"GCSDevice": FakeGCSDevice}))
+
+    assert pi_scan.enumerate_usb_controllers("C-863") == ["SN123"]
+    assert captured["controller"] == "C-863"
+    assert Path(captured["gcsdll"]) == dll
 
 
 def test_pi_stage_formats_missing_gcs2_dll_error() -> None:

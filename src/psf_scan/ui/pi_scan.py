@@ -56,8 +56,9 @@ def enumerate_usb_controllers(controller_mask: str = "C-863") -> list[str]:
         from pipython import GCSDevice
     except ImportError:
         return []
+    from ..drivers import pi_link
     try:
-        with GCSDevice(controller_mask) as dev:
+        with pi_link.make_gcs_device(GCSDevice, controller_mask) as dev:
             return list(dev.EnumerateUSB(mask=controller_mask) or [])
     except Exception:  # noqa: BLE001
         return []
@@ -77,7 +78,7 @@ def scan_rs232_daisy(controller: str, comport, baudrate: int = 115200) -> list[s
     from ..drivers import pi_link
     import sys
 
-    with GCSDevice(controller) as dev:
+    with pi_link.make_gcs_device(GCSDevice, controller) as dev:
         if sys.platform in ("linux", "linux2"):
             sp = comport if isinstance(comport, str) and comport else ""
             items = pi_link.scan_rs232_daisy(dev, baudrate=int(baudrate), serialport=sp)

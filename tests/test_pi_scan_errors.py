@@ -39,7 +39,7 @@ def test_driver_scan_rs232_daisy_uses_open_return_value_on_windows(
     assert items == ["1 C-863", "2 M-531"]
 
 
-def test_open_daisy_rs232_uses_open_return_value_on_windows(
+def test_open_daisy_rs232_uses_internal_handle_on_windows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     state = {"connected": None}
@@ -52,7 +52,7 @@ def test_open_daisy_rs232_uses_open_return_value_on_windows(
             assert baudrate == 9600
             return ["1 C-863", "2 M-531"]
 
-        def ConnectDaisyChainDevice(self, device_id, dcid):
+        def ConnectDaisyChainDevice(self, device_id, dcid=None):
             state["connected"] = (device_id, dcid)
 
         def CloseDaisyChain(self) -> None:
@@ -70,7 +70,38 @@ def test_open_daisy_rs232_uses_open_return_value_on_windows(
     )
 
     assert dcid == 7
-    assert state["connected"] == (1, 7)
+    assert state["connected"] == (1, None)
+
+
+def test_open_usb_daisy_uses_internal_handle_on_windows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = {"connected": None, "closed": False}
+
+    class DummyDev:
+        dcid = 11
+
+        def OpenUSBDaisyChain(self, description):
+            assert description == "C-863"
+            return ["1 C-863"]
+
+        def ConnectDaisyChainDevice(self, device_id, dcid=None):
+            state["connected"] = (device_id, dcid)
+
+        def CloseDaisyChain(self) -> None:
+            state["closed"] = True
+
+    monkeypatch.setattr(pi_link, "_is_linux", lambda: False)
+
+    dcid = pi_link.open_link(
+        DummyDev(),
+        interface="usb-daisy",
+        controller="C-863",
+        device_id=None,
+    )
+
+    assert dcid == 11
+    assert state == {"connected": (1, None), "closed": False}
 
 
 def test_ui_scan_rs232_daisy_propagates_driver_error(monkeypatch: pytest.MonkeyPatch) -> None:

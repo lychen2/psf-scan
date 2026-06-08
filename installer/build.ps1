@@ -12,9 +12,9 @@
 # installer is built without it and a warning is emitted.
 #
 # If installer\vendored\PI_GCS2_DLL_x64.dll is present, it is bundled into
-# the PyInstaller onedir payload so PI stages work without a separate
-# GCSTranslator install. The release workflow restores this DLL from the
-# pi-runtime GitHub release asset before running this script.
+# the PyInstaller onedir payload and copied next to PsfScan.exe so PI stages
+# work without a separate GCSTranslator install. The release workflow restores
+# this DLL from the pi-runtime GitHub release asset before running this script.
 #
 # Prerequisites: see docs/build/RELEASE_WINDOWS.md §A (one-time environment setup).
 
@@ -72,6 +72,9 @@ if (-not $SkipPyInstaller) {
 $dist = Join-Path $repo "build\dist\PsfScan"
 if (-not (Test-Path (Join-Path $dist "PsfScan.exe"))) {
     throw "PyInstaller 产物缺失：$dist\PsfScan.exe"
+}
+if (Test-Path $piDll) {
+    Copy-Item $piDll (Join-Path $dist "PI_GCS2_DLL_x64.dll") -Force
 }
 
 # --- 5. Inno Setup --------------------------------------------------------
