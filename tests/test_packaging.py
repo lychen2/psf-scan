@@ -18,9 +18,45 @@ def test_pyserial_is_runtime_dependency() -> None:
 def test_pyinstaller_includes_pyserial_modules() -> None:
     text = SPEC.read_text(encoding="utf-8")
     assert 'collect_data_files("pipython")' in text
+    assert 'PI_GCS2_DLL_x64.dll' in text
+    assert 'PI_GCS2_BINARIES' in text
     assert '"pyqtgraph.exporters"' in text
     assert '"pipython"' in text
     assert '"pipython.pidevice.interfaces.gcsdll"' in text
     assert '"serial.tools.list_ports"' in text
     assert '"serial.tools.list_ports_windows"' in text
     assert "support_contact.json" in text
+
+
+def test_pi_stage_uses_bundled_gcs2_dll(monkeypatch) -> None:
+    from psf_scan.drivers.stage_pi import PIStage
+
+    captured = {}
+
+    class FakeGCSDevice:
+        def __init__(self, controller, gcsdll=""):
+            captured["controller"] = controller
+            captured["gcsdll"] = gcsdll
+
+    monkeypatch.setattr(
+        "psf_scan.drivers.pi_link.find_bundled_gcs2_dll",
+        lambda: Path("C:/app/PI_GCS2_DLL_x64.dll"),
+    )
+
+    stage = PIStage(controller="C-863")
+    assert stage._make_gcs_device(FakeGCSDevice, "C-863")
+    assert captured == {
+        "controller": "C-863",
+        "gcsdll": "C:/app/PI_GCS2_DLL_x64.dll",
+    }
+
+
+def test_pi_stage_formats_missing_gcs2_dll_error() -> None:
+    from psf_scan.drivers.stage_pi import PIStage
+
+    stage = PIStage(controller="C-863")
+    message = stage._format_connect_error(OSError("C:/app/PI_GCS2_DLL_x64.dll not found"))
+
+    assert "PI_GCS2_DLL_x64.dll not found" in message
+    assert "PI Software Suite" in message
+    assert "程序目录" in message

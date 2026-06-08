@@ -15,7 +15,14 @@ REPO = Path(SPECPATH).resolve().parent
 SRC = REPO / "src"
 RESOURCES = REPO / "installer" / "resources"
 SUPPORT_CONTACT = REPO / "installer" / "support_contact.json"
+VENDORED = REPO / "installer" / "vendored"
 PIPYTHON_DATAS = collect_data_files("pipython")
+PI_GCS2_DLL = VENDORED / "PI_GCS2_DLL_x64.dll"
+PI_GCS2_BINARIES = (
+    [(str(PI_GCS2_DLL), ".")]
+    if sys.platform == "win32" and PI_GCS2_DLL.exists()
+    else []
+)
 
 # Platform-specific OpenGL backend modules. PyInstaller would warn for any
 # missing entries; listing only what the current platform needs avoids noise.
@@ -33,7 +40,7 @@ block_cipher = None
 a = Analysis(
     [str(SRC / "psf_scan" / "__main__.py")],
     pathex=[str(SRC)],
-    binaries=[],
+    binaries=PI_GCS2_BINARIES,
     datas=[
         # Hikvision MVS Python bindings (.py files, vendored in tree)
         (str(SRC / "psf_scan" / "vendor" / "MvImport"),

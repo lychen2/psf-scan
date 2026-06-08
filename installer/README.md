@@ -18,7 +18,7 @@ PSF Scan 的 Windows 打包资产。
 | `requirements-build.txt` | 构建期 pip 依赖（仅 pyinstaller） | 升级 pyinstaller 时 |
 | `resources/` | 图标、splash、EULA、版本信息 | 美术资产更新时 |
 | `_make_placeholder_resources.py` | 占位图标生成器（需 Pillow） | 仅占位阶段 |
-| `vendored/` | 大文件本地存放（**不入库**） | 升级 MVS SDK 时 |
+| `vendored/` | 大文件本地存放（**不入库**）：MVS SDK 安装器、`PI_GCS2_DLL_x64.dll` | 升级设备运行时时 |
 
 ## 一键构建（Windows 构建机）
 
@@ -34,6 +34,8 @@ PSF Scan 的 Windows 打包资产。
 [OK] 安装包: release\PsfScan-Setup-1.0.0.exe  (~300 MB)
 [OK] SHA256: <hash>
 ```
+
+PI 位移台需要 PI 官方 GCS2 运行时。私有 Windows 构建时，把 `PI_GCS2_DLL_x64.dll` 放到 `installer/vendored/`，PyInstaller 会把它打到 `PsfScan.exe` 同目录；公开 CI 构建不携带该专有 DLL，用户需安装 PI Software Suite / GCSTranslator，或手动把 DLL 放到安装目录。
 
 ## 联系方式
 

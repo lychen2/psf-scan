@@ -96,7 +96,7 @@ class PIStage(StageBase):
             self.error.emit(f"未安装 pipython: {exc}"); return
         cfg = self._cfg
         try:
-            self._dev = GCSDevice(cfg.controller)
+            self._dev = self._make_gcs_device(GCSDevice, cfg.controller)
             actual_iface = pi_link._choose_interface(cfg)
             self._dcid = pi_link.open_link(
                 self._dev,
@@ -131,7 +131,23 @@ class PIStage(StageBase):
             self.position_changed.emit(*self._pos_um)
         except Exception as exc:  # noqa: BLE001
             self._dev = self._dcid = self._axis_id = None
-            self.error.emit(f"PI 连接失败: {exc}")
+            self.error.emit(f"PI 连接失败: {self._format_connect_error(exc)}")
+
+    def _format_connect_error(self, exc: Exception) -> str:
+        message = str(exc)
+        if "PI_GCS2_DLL_x64.dll" in message or "pi_gcs2_dll_x64.dll" in message.lower():
+            return (
+                f"{message}\n"
+                "缺少 PI 官方 GCS2 运行时。请安装 PI Software Suite / GCSTranslator，"
+                "或把 PI_GCS2_DLL_x64.dll 放到程序目录后重启。"
+            )
+        return message
+
+    def _make_gcs_device(self, gcs_device_type, controller: str):
+        dll_path = pi_link.find_bundled_gcs2_dll()
+        if dll_path:
+            return gcs_device_type(controller, gcsdll=str(dll_path))
+        return gcs_device_type(controller)
 
     def disconnect(self) -> None:
         self._invoke_on_stage_thread("_disconnect_on_stage_thread")

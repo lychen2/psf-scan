@@ -11,6 +11,11 @@
 # installer and silently invoked during install. If absent (e.g. CI), the
 # installer is built without it and a warning is emitted.
 #
+# If installer\vendored\PI_GCS2_DLL_x64.dll is present, it is bundled next to
+# PsfScan.exe so PI stages work without a separate GCSTranslator install.
+# GitHub Actions cannot ship that proprietary DLL; release builds from CI will
+# warn and require users to install PI Software Suite separately.
+#
 # Prerequisites: see docs/build/RELEASE_WINDOWS.md §A (one-time environment setup).
 
 [CmdletBinding()]
@@ -36,14 +41,20 @@ if ($LASTEXITCODE -ne 0) { throw "bump_version 失败 ($LASTEXITCODE)" }
 $version = (Get-Content "installer\version.json" | ConvertFrom-Json).version
 Write-Host "[build] target version: $version" -ForegroundColor Cyan
 
-# --- 3. 检测 MVS SDK exe (可选) ------------------------------------------
+# --- 3. 检测 vendor 运行时 (可选) ----------------------------------------
 $vendored = Join-Path $repo "installer\vendored"
 $mvsExe   = Get-ChildItem $vendored -Filter "MVS_SDK_*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+$piDll    = Join-Path $vendored "PI_GCS2_DLL_x64.dll"
 if ($mvsExe) {
     Write-Host "[build] using MVS SDK: $($mvsExe.Name)" -ForegroundColor Cyan
 } else {
     Write-Warning "未找到 installer\vendored\MVS_SDK_*.exe；安装器将不带 MVS SDK 静默安装。"
-    Write-Warning "如果你打算给海康相机用户用，请按 RELEASE_WINDOWS.md §B.2 把 SDK exe 放到 vendored/ 后重跑。"
+    Write-Warning "如果你打算给海康相机用户用，请把 SDK exe 放到 vendored/ 后重跑。"
+}
+if (Test-Path $piDll) {
+    Write-Host "[build] bundling PI GCS2 DLL: PI_GCS2_DLL_x64.dll" -ForegroundColor Cyan
+} else {
+    Write-Warning "未找到 installer\vendored\PI_GCS2_DLL_x64.dll；PI 位移台用户需安装 PI Software Suite / GCSTranslator。"
 }
 
 # --- 4. PyInstaller -------------------------------------------------------
@@ -101,4 +112,9 @@ if ($mvsExe) {
     Write-Host "[OK] 此包含 MVS SDK 静默安装。" -ForegroundColor Green
 } else {
     Write-Host "[OK] 此包不含 MVS SDK；MVS 相机用户需自行安装。" -ForegroundColor Yellow
+}
+if (Test-Path $piDll) {
+    Write-Host "[OK] 此包包含 PI GCS2 DLL。" -ForegroundColor Green
+} else {
+    Write-Host "[OK] 此包不含 PI GCS2 DLL；PI 位移台用户需自行安装 PI Software Suite。" -ForegroundColor Yellow
 }

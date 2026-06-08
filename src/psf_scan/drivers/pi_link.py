@@ -17,6 +17,7 @@ import ctypes
 import os
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 
@@ -62,6 +63,17 @@ class PIStageConfig:
             if hasattr(cfg, k):
                 setattr(cfg, k, v)
         return cfg
+
+
+def find_bundled_gcs2_dll() -> Optional[Path]:
+    """Return the bundled Windows PI GCS2 DLL path when packaged with PyInstaller."""
+    if sys.platform != "win32":
+        return None
+    base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).resolve().parent))
+    dll = base / "PI_GCS2_DLL_x64.dll"
+    if dll.is_file():
+        return dll
+    return None
 
 
 def _is_linux() -> bool:
